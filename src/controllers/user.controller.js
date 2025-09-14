@@ -1,8 +1,11 @@
-const UserService = require('../services/user.service');
+let UserService = require('../services/user.service');
 const User = require('../models/User');
 const { catchAsync } = require('../middleware/error.middleware');
 const { AuthorizationError, NotFoundError, ValidationError } = require('../utils/errors');
 const logger = require('../utils/logger');
+const config = require('../config');
+
+UserService = new UserService(config);
 
 class UserController {
   /**

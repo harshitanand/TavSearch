@@ -3,7 +3,7 @@ const PDFDocument = require('pdfkit');
 const { logger } = require('../utils/logger');
 
 class ExportService {
-  static async generateExport(result, format) {
+  async generateExport(result, format) {
     try {
       switch (format.toLowerCase()) {
         case 'json':
@@ -63,7 +63,7 @@ class ExportService {
     return csv;
   }
 
-  static async exportToExcel(result) {
+  async exportToExcel(result) {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Market Analysis');
 
@@ -105,7 +105,7 @@ class ExportService {
     return await workbook.xlsx.writeBuffer();
   }
 
-  static async exportToPDF(result) {
+  async exportToPDF(result) {
     return new Promise((resolve, reject) => {
       try {
         const doc = new PDFDocument();

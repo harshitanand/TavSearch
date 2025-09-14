@@ -7,7 +7,7 @@ class UserService {
     this.logger = logger;
   }
 
-  static async createUser(userData) {
+  async createUser(userData) {
     try {
       this.logger.info('Creating new user', { email: userData.email });
 
@@ -41,7 +41,7 @@ class UserService {
     }
   }
 
-  static async getUserById(userId) {
+  async getUserById(userId) {
     try {
       const user = await User.findById(userId);
       if (!user) {
@@ -55,7 +55,7 @@ class UserService {
     }
   }
 
-  static async getUserByEmail(email) {
+  async getUserByEmail(email) {
     try {
       const user = await User.findOne({ email, isActive: true });
       if (!user) {
@@ -69,7 +69,7 @@ class UserService {
     }
   }
 
-  static async updateUser(userId, updateData) {
+  async updateUser(userId, updateData) {
     try {
       this.logger.info('Updating user', { userId });
 
@@ -99,7 +99,7 @@ class UserService {
     }
   }
 
-  static async updateUserPreferences(userId, preferences) {
+  async updateUserPreferences(userId, preferences) {
     try {
       const user = await User.findByIdAndUpdate(
         userId,
@@ -124,7 +124,7 @@ class UserService {
     }
   }
 
-  static async recordUserLogin(userId, loginMetadata = {}) {
+  async recordUserLogin(userId, loginMetadata = {}) {
     try {
       await User.findByIdAndUpdate(userId, {
         lastLoginAt: new Date(),
@@ -144,7 +144,7 @@ class UserService {
     }
   }
 
-  static async getUserAnalysisHistory(userId, options = {}) {
+  async getUserAnalysisHistory(userId, options = {}) {
     try {
       const { page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc' } = options;
 
@@ -177,7 +177,7 @@ class UserService {
     }
   }
 
-  static async deactivateUser(userId) {
+  async deactivateUser(userId) {
     try {
       const user = await User.findByIdAndUpdate(
         userId,
@@ -201,7 +201,7 @@ class UserService {
     }
   }
 
-  static async getAllUsers(options = {}) {
+  async getAllUsers(options = {}) {
     try {
       const {
         page = 1,

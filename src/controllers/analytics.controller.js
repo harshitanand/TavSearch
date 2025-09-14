@@ -1,7 +1,10 @@
-const AnalyticsService = require('../services/analytics.service');
+let AnalyticsService = require('../services/analytics.service');
 const { catchAsync } = require('../middleware/error.middleware');
 const { AuthorizationError } = require('../utils/errors');
 const logger = require('../utils/logger');
+const config = require('../config');
+
+AnalyticsService = new AnalyticsService(config);
 
 class AnalyticsController {
   /**

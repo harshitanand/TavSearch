@@ -1,9 +1,12 @@
-const ExportService = require('../services/export.service');
+let ExportService = require('../services/export.service');
 const Query = require('../models/Query');
 const Result = require('../models/Result');
 const { catchAsync } = require('../middleware/error.middleware');
 const { AuthorizationError, NotFoundError, ValidationError } = require('../utils/errors');
 const logger = require('../utils/logger');
+const config = require('../config');
+
+ExportService = new ExportService(config);
 
 class ExportController {
   /**

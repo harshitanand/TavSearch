@@ -16,7 +16,7 @@ class WorkflowService extends EventEmitter {
     this.maxConcurrentWorkflows = config.analysis.maxConcurrent || 5;
   }
 
-  static async executeWorkflow(query, userId) {
+  async executeWorkflow(query, userId) {
     // Check concurrent workflow limit
     if (this.activeWorkflows.size >= this.maxConcurrentWorkflows) {
       throw new ApiError('Maximum concurrent workflows reached. Please try again later.', 429);
@@ -164,7 +164,7 @@ class WorkflowService extends EventEmitter {
     }
   }
 
-  static async updateProgress(state, step, currentStep) {
+  async updateProgress(state, step, currentStep) {
     state.currentStep = step;
     state.progress.current = currentStep;
     state.progress.percentage = Math.round((currentStep / state.progress.total) * 100);
@@ -176,7 +176,7 @@ class WorkflowService extends EventEmitter {
     });
   }
 
-  static async getWorkflowProgress(workflowId) {
+  async getWorkflowProgress(workflowId) {
     const workflow = this.activeWorkflows.get(workflowId);
     if (!workflow) {
       return null;
@@ -204,7 +204,7 @@ class WorkflowService extends EventEmitter {
     return Math.round(avgTimePerStep * remainingSteps);
   }
 
-  static async cancelWorkflow(workflowId) {
+  async cancelWorkflow(workflowId) {
     const workflow = this.activeWorkflows.get(workflowId);
     if (workflow) {
       workflow.cancelled = true;
@@ -233,7 +233,7 @@ class WorkflowService extends EventEmitter {
   }
 
   // Graceful shutdown
-  static async shutdown() {
+  async shutdown() {
     logger.info('Shutting down workflow service...');
 
     // Cancel all active workflows

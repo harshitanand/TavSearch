@@ -9,7 +9,7 @@ class AnalyticsService {
     this.logger = logger;
   }
 
-  static async getSystemAnalytics(dateFilter = {}) {
+  async getSystemAnalytics(dateFilter = {}) {
     try {
       this.logger.info('Getting system analytics', { dateFilter });
 
@@ -59,7 +59,7 @@ class AnalyticsService {
     }
   }
 
-  static async getUserAnalytics(userId, dateFilter = {}) {
+  async getUserAnalytics(userId, dateFilter = {}) {
     try {
       this.logger.info('Getting user analytics', { userId, dateFilter });
 
@@ -111,7 +111,7 @@ class AnalyticsService {
     }
   }
 
-  static async getQueryTrends(period = '30d', granularity = 'day') {
+  async getQueryTrends(period = '30d', granularity = 'day') {
     try {
       this.logger.info('Getting query trends', { period, granularity });
 
@@ -175,7 +175,7 @@ class AnalyticsService {
     }
   }
 
-  static async getPerformanceMetrics(dateFilter = {}) {
+  async getPerformanceMetrics(dateFilter = {}) {
     try {
       this.logger.info('Getting performance metrics', { dateFilter });
 
@@ -233,7 +233,7 @@ class AnalyticsService {
     }
   }
 
-  static async getTopQueries(dateFilter = {}, limit = 10) {
+  async getTopQueries(dateFilter = {}, limit = 10) {
     try {
       const topQueries = await Query.aggregate([
         ...(Object.keys(dateFilter).length > 0 ? [{ $match: dateFilter }] : []),
@@ -270,7 +270,7 @@ class AnalyticsService {
   }
 
   // Helper methods
-  static async calculateAverageProcessingTime(filter = {}) {
+  async calculateAverageProcessingTime(filter = {}) {
     try {
       const result = await Query.aggregate([
         { $match: { ...filter, duration: { $exists: true, $ne: null } } },
@@ -288,7 +288,7 @@ class AnalyticsService {
     }
   }
 
-  static async getSystemHealthMetrics() {
+  async getSystemHealthMetrics() {
     try {
       const now = new Date();
       const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
@@ -324,7 +324,7 @@ class AnalyticsService {
     }
   }
 
-  static async getSystemTrends(dateFilter = {}) {
+  async getSystemTrends(dateFilter = {}) {
     try {
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -362,7 +362,7 @@ class AnalyticsService {
     }
   }
 
-  static async getUserEngagementMetrics(dateFilter = {}) {
+  async getUserEngagementMetrics(dateFilter = {}) {
     try {
       const engagement = await User.aggregate([
         {
@@ -420,7 +420,7 @@ class AnalyticsService {
     }
   }
 
-  static async getUserRecentActivity(userId, days = 30) {
+  async getUserRecentActivity(userId, days = 30) {
     try {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - days);
@@ -460,7 +460,7 @@ class AnalyticsService {
     }
   }
 
-  static async getUserCategoryBreakdown(userId, dateFilter = {}) {
+  async getUserCategoryBreakdown(userId, dateFilter = {}) {
     try {
       const categories = await Query.aggregate([
         {
@@ -495,7 +495,7 @@ class AnalyticsService {
     }
   }
 
-  static async getUserPerformanceMetrics(userId, dateFilter = {}) {
+  async getUserPerformanceMetrics(userId, dateFilter = {}) {
     try {
       // Get user's query IDs for the period
       const userQueries = await Query.find({
@@ -533,7 +533,7 @@ class AnalyticsService {
     }
   }
 
-  static async generateUserInsights(userId, stats) {
+  async generateUserInsights(userId, stats) {
     const insights = [];
 
     try {

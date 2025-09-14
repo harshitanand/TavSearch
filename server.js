@@ -1,6 +1,9 @@
 const app = require('./src/app');
-const cacheService = require('./src/services/cache.service');
+let cacheService = require('./src/services/cache.service');
 const { logger } = require('./src/utils/logger');
+const config = require('./src/config');
+
+cacheService = new cacheService(config);
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (error) => {

@@ -13,7 +13,7 @@ class AnalysisService extends EventEmitter {
     this.maxConcurrentWorkflows = config.analysis?.maxConcurrent || 5;
   }
 
-  static async startAnalysis({ userId, query, priority = 1, tags = [] }) {
+  async startAnalysis({ userId, query, priority = 1, tags = [] }) {
     // Check concurrent workflow limit
     if (this.activeWorkflows?.size >= this.maxConcurrentWorkflows) {
       throw new Error('Maximum concurrent analyses reached. Please try again later.');
@@ -56,7 +56,7 @@ class AnalysisService extends EventEmitter {
     }
   }
 
-  static async processAnalysisAsync(queryId, query, userId, queryRecord) {
+  async processAnalysisAsync(queryId, query, userId, queryRecord) {
     try {
       logger.info(`Starting LangChain Multi-Agent analysis for query ${queryId}`);
 
@@ -138,7 +138,7 @@ class AnalysisService extends EventEmitter {
     }
   }
 
-  static async getAnalysisStatus(queryId, userId) {
+  async getAnalysisStatus(queryId, userId) {
     try {
       const query = await Query.findOne({ _id: queryId, userId });
 
@@ -176,7 +176,7 @@ class AnalysisService extends EventEmitter {
     }
   }
 
-  static async getAnalysisResults(queryId, userId) {
+  async getAnalysisResults(queryId, userId) {
     try {
       const query = await Query.findOne({ _id: queryId, userId });
 
@@ -243,7 +243,7 @@ class AnalysisService extends EventEmitter {
     return agentMap[index] || 'Unknown Agent';
   }
 
-  static async cancelAnalysis(queryId, userId) {
+  async cancelAnalysis(queryId, userId) {
     try {
       const query = await Query.findOne({ _id: queryId, userId });
 
@@ -273,7 +273,7 @@ class AnalysisService extends EventEmitter {
     }
   }
 
-  static async retryAnalysis(queryId, userId) {
+  async retryAnalysis(queryId, userId) {
     try {
       const originalQuery = await Query.findOne({ _id: queryId, userId });
 
@@ -294,7 +294,7 @@ class AnalysisService extends EventEmitter {
     }
   }
 
-  static async getUserAnalyses(userId, options = {}) {
+  async getUserAnalyses(userId, options = {}) {
     try {
       const { limit = 10, skip = 0, status, sortBy = 'createdAt', sortOrder = 'desc' } = options;
 
