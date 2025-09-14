@@ -117,7 +117,7 @@ const TavSearchApp = () => {
 
   const fetchHistory = async () => {
     try {
-      const response = await fetch(`${apiUrl}/api/history`);
+      const response = await fetch(`${apiUrl}/api/export/history`);
       if (response.ok) {
         const data = await response.json();
         setHistory(data.history || []);
@@ -147,7 +147,7 @@ const TavSearchApp = () => {
     };
 
     try {
-      const response = await fetch(`${apiUrl}/api/analyze`, {
+      const response = await fetch(`${apiUrl}/api/analysis`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -203,7 +203,7 @@ const TavSearchApp = () => {
   const handleHistorySelect = async (historyItem) => {
     try {
       // Try to fetch full results for this history item from API
-      const response = await fetch(`${apiUrl}/api/history/${historyItem.id}`);
+      const response = await fetch(`${apiUrl}/api/export/history/${historyItem.id}`);
       if (response.ok) {
         const data = await response.json();
         setResults(data.results || data);

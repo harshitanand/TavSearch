@@ -11,20 +11,19 @@ const resultSchema = new mongoose.Schema(
     searchStrategy: {
       primaryTerms: [String],
       secondaryTerms: [String],
-      domains: [String],
+      searchCategories: [String],
       timeRange: String,
     },
     rawData: [
       {
-        title: String,
-        url: String,
-        content: String,
-        score: Number,
-        publishedDate: Date,
-        searchTerm: String,
-        type: String,
+        type: mongoose.Schema.Types.Mixed,
+        default: {},
       },
     ],
+    metaData: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
     processedData: {
       totalSources: Number,
       qualityMetrics: {
@@ -65,11 +64,8 @@ const resultSchema = new mongoose.Schema(
       lastExported: Date,
     },
     performance: {
-      searchDuration: Number,
-      analysisDuration: Number,
-      totalDuration: Number,
-      sourcesProcessed: Number,
-      apiCallsCount: Number,
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
     },
   },
   {

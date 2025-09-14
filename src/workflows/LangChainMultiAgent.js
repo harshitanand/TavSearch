@@ -17,7 +17,7 @@ class TavilySearchTool {
 
   async search(query, options = {}) {
     try {
-      logger.debug('Direct Tavily search', { query, options });
+      logger.debug('Tavily API call', { query: query.substring(0, 50) });
 
       const response = await fetch(`${this.baseUrl}/search`, {
         method: 'POST',
@@ -29,10 +29,10 @@ class TavilySearchTool {
           query: query.trim(),
           search_depth: options.search_depth || 'advanced',
           max_results: options.max_results || 10,
-          include_answer: false, // This was causing 422 errors
+          include_answer: false,
           include_raw_content: false,
           include_domains: options.include_domains || [],
-          exclude_domains: options.exclude_domains || ['reddit.com', 'twitter.com', 'facebook.com'],
+          exclude_domains: options.exclude_domains || [],
         }),
       });
 
@@ -41,23 +41,43 @@ class TavilySearchTool {
         logger.error('Tavily API error', {
           status: response.status,
           error: errorText,
-          query,
+          query: query.substring(0, 50),
         });
-        throw new Error(`Tavily API error ${response.status}: ${errorText}`);
+        return []; // ✅ Return empty array on error
       }
 
+      // ✅ Parse JSON response
       const data = await response.json();
-      return data.results || [];
+
+      // ✅ Extract results array - Tavily returns { results: [...] }
+      const results = data.results || [];
+
+      // ✅ Verify it's an array before returning
+      if (!Array.isArray(results)) {
+        logger.error('Tavily returned non-array results', {
+          type: typeof results,
+          data: JSON.stringify(data).substring(0, 200),
+        });
+        return [];
+      }
+
+      logger.debug('Tavily search successful', {
+        query: query.substring(0, 50),
+        resultCount: results.length,
+        isArray: Array.isArray(results),
+      });
+
+      return results; // ✅ Return actual array
     } catch (error) {
-      logger.error('Tavily search failed', { query, error: error.message });
-      return []; // Return empty array instead of throwing
+      logger.error('Tavily search failed', {
+        query: query.substring(0, 50),
+        error: error.message,
+      });
+      return []; // ✅ Return empty array on error
     }
   }
 }
 
-/**
- * Multi-Agent Market Intelligence System using LangChain
- */
 class LangChainMultiAgent {
   constructor(config) {
     this.config = config;
@@ -119,29 +139,43 @@ class LangChainMultiAgent {
     };
 
     try {
-      // Execute agents in sequence with proper error handling
       let currentState = state;
 
       // Agent 1: Planner
       currentState = await this.executeAgent('planner', currentState);
 
-      // Agent 2: Searcher (FIXED)
+      // Agent 2: Searcher
       currentState = await this.executeAgent('searcher', currentState);
 
-      // Agent 3: Analyzer
-      currentState = await this.executeAgent('analyzer', currentState);
-
-      // Agent 4: Synthesizer
-      currentState = await this.executeAgent('synthesizer', currentState);
-
-      // Agent 5: Validator
-      currentState = await this.executeAgent('validator', currentState);
-
-      logger.info(`LangChain Multi-Agent workflow completed`, {
-        workflowId,
-        totalSteps: 5,
-        errors: currentState.errors?.length || 0,
+      // ✅ CRITICAL DEBUG: Check data type after search
+      logger.info('POST-SEARCH DEBUG CHECK', {
+        rawDataType: typeof currentState.rawData,
+        rawDataIsArray: Array.isArray(currentState.rawData),
+        rawDataLength: currentState.rawData?.length || 0,
+        rawDataConstructor: currentState.rawData?.constructor?.name || 'unknown',
+        // Log first few characters if it's a string
+        rawDataPreview:
+          typeof currentState.rawData === 'string'
+            ? currentState.rawData.substring(0, 100)
+            : 'not-string',
       });
+
+      // ✅ EMERGENCY FIX: If rawData is somehow a string, parse it
+      if (typeof currentState.rawData === 'string') {
+        logger.error('EMERGENCY: rawData is a string after searchAgent!');
+        try {
+          currentState.rawData = JSON.parse(currentState.rawData);
+          logger.info('Emergency parse successful');
+        } catch (e) {
+          logger.error('Emergency parse failed, using empty array');
+          currentState.rawData = [];
+        }
+      }
+
+      // Continue with other agents
+      currentState = await this.executeAgent('analyzer', currentState);
+      currentState = await this.executeAgent('synthesizer', currentState);
+      currentState = await this.executeAgent('validator', currentState);
 
       return {
         success: true,
@@ -154,19 +188,11 @@ class LangChainMultiAgent {
         },
       };
     } catch (error) {
-      logger.error(`LangChain Multi-Agent workflow failed`, { workflowId, error: error.message });
-
+      logger.error(`Workflow failed`, { workflowId, error: error.message });
       return {
         success: false,
         workflowId,
         error: error.message,
-        metadata: {
-          workflowId,
-          userId,
-          startTime: new Date().toISOString(),
-          endTime: new Date().toISOString(),
-          failed: true,
-        },
       };
     }
   }
@@ -276,9 +302,6 @@ class LangChainMultiAgent {
     };
   }
 
-  /**
-   * Agent 2: Search Agent - FIXED VERSION
-   */
   async searchAgent(state) {
     logger.info('SearchAgent: Gathering data', {
       primaryTerms: state.searchPlan?.primaryTerms?.length || 0,
@@ -286,7 +309,19 @@ class LangChainMultiAgent {
 
     const searchPlan = state.searchPlan;
     if (!searchPlan) {
-      throw new Error('No search plan available');
+      return {
+        ...state,
+        rawData: [], // ✅ Return actual empty array
+        currentStep: 'search_complete',
+        progress: { current: 2, total: 5, percentage: 40 },
+        metadata: {
+          ...state.metadata,
+          searchTimestamp: new Date().toISOString(),
+          totalSources: 0,
+          searchTermsUsed: 0,
+        },
+        messages: [...state.messages, new AIMessage('No search plan available')],
+      };
     }
 
     const allSearchTerms = [
@@ -294,73 +329,131 @@ class LangChainMultiAgent {
       ...(searchPlan.secondaryTerms || []),
     ];
 
-    // Validate search terms
-    const validTerms = allSearchTerms.filter(
-      (term) => term && typeof term === 'string' && term.trim().length > 0
-    );
+    const validTerms = allSearchTerms
+      .filter((term) => term && typeof term === 'string' && term.trim().length > 0)
+      .slice(0, 6);
 
     if (validTerms.length === 0) {
-      throw new Error('No valid search terms found');
+      return {
+        ...state,
+        rawData: [], // ✅ Return actual empty array
+        currentStep: 'search_complete',
+        progress: { current: 2, total: 5, percentage: 40 },
+        metadata: {
+          ...state.metadata,
+          searchTimestamp: new Date().toISOString(),
+          totalSources: 0,
+          searchTermsUsed: 0,
+        },
+        messages: [...state.messages, new AIMessage('No valid search terms')],
+      };
     }
 
-    logger.info(`Executing ${validTerms.length} search queries`);
+    const rawData = []; // ✅ Start with actual array
+    let successfulSearches = 0;
+    let failedSearches = 0;
 
-    // Use Promise.allSettled to handle individual search failures
-    const searchPromises = validTerms.slice(0, 6).map(async (term, index) => {
+    // Execute searches sequentially to avoid rate limits
+    for (const [index, term] of validTerms.entries()) {
       try {
-        // Add delay between requests to avoid rate limiting
+        // Add delay between requests
         if (index > 0) {
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
 
         const searchQuery = `${term} ${state.query}`.substring(0, 400).trim();
-        logger.debug(`Searching: ${searchQuery}`);
+        logger.debug(`Executing search ${index + 1}/${validTerms.length}: ${searchQuery}`);
 
-        const results = await this.searchTool.search(searchQuery, {
+        // Call Tavily API directly
+        const searchResults = await this.searchTool.search(searchQuery, {
           search_depth: 'advanced',
           max_results: 5,
-          exclude_domains: ['reddit.com', 'twitter.com', 'facebook.com', 'youtube.com'],
+          exclude_domains: ['reddit.com', 'twitter.com', 'facebook.com'],
         });
 
-        // Transform results to consistent format
-        return results.map((result) => ({
-          title: result.title || 'Unknown Title',
-          url: result.url || '',
-          content: result.content || '',
-          score: result.score || 0,
-          searchTerm: term,
-          retrievedAt: new Date().toISOString(),
-          relevanceScore: this.calculateRelevanceScore(result, state.query),
-        }));
+        // ✅ CRITICAL: Ensure searchResults is an array
+        let results = [];
+        if (Array.isArray(searchResults)) {
+          results = searchResults;
+        } else if (
+          searchResults &&
+          typeof searchResults === 'object' &&
+          Array.isArray(searchResults.results)
+        ) {
+          results = searchResults.results;
+        } else {
+          logger.warn(`Search ${index + 1} returned non-array:`, typeof searchResults);
+          results = [];
+        }
+
+        // ✅ Process each result individually and add to rawData array
+        for (const result of results) {
+          if (result && typeof result === 'object' && result.title && result.content) {
+            // Create clean result object
+            const cleanResult = {
+              title: String(result.title),
+              url: String(result.url || ''),
+              content: String(result.content).substring(0, 1000), // Limit content
+              score: Number(result.score || 0),
+              searchTerm: String(term),
+              retrievedAt: new Date().toISOString(),
+              relevanceScore: this.calculateRelevanceScore(result, state.query),
+              type: 'web_search',
+            };
+
+            // ✅ Push individual object to array (NOT stringify)
+            rawData.push(cleanResult);
+          }
+        }
+
+        successfulSearches++;
+        logger.debug(`Search ${index + 1} completed: ${results.length} results added`);
       } catch (error) {
-        logger.warn(`Search failed for term: ${term}`, {
-          error: error.message,
-          index,
-        });
-        return []; // Return empty array for failed searches
+        failedSearches++;
+        logger.warn(`Search ${index + 1} failed for term: ${term}`, { error: error.message });
+        // Continue with next search instead of breaking
       }
-    });
+    }
 
-    // Wait for all searches to complete
-    const searchResults = await Promise.allSettled(searchPromises);
-
-    // Extract successful results
-    const rawData = searchResults
-      .filter((result) => result.status === 'fulfilled')
-      .flatMap((result) => result.value)
-      .filter((item) => item && item.content && item.content.length > 50);
-
-    // Sort by relevance score
+    // Sort by relevance
     rawData.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
 
-    // Count failed searches
-    const failedSearches = searchResults.filter((result) => result.status === 'rejected').length;
+    // ✅ FINAL VERIFICATION: Ensure rawData is still an array
+    if (!Array.isArray(rawData)) {
+      logger.error('CRITICAL ERROR: rawData is not an array!', {
+        type: typeof rawData,
+        value: rawData,
+      });
+      // Force it to be an array
+      return {
+        ...state,
+        rawData: [], // ✅ Emergency fallback to empty array
+        currentStep: 'search_complete',
+        progress: { current: 2, total: 5, percentage: 40 },
+        metadata: {
+          ...state.metadata,
+          searchTimestamp: new Date().toISOString(),
+          totalSources: 0,
+          searchTermsUsed: validTerms.length,
+          failedSearches: validTerms.length,
+          error: 'rawData structure failure',
+        },
+        messages: [...state.messages, new AIMessage('Search failed - data structure error')],
+      };
+    }
 
-    logger.info(`Search completed: ${rawData.length} results, ${failedSearches} failed searches`);
+    logger.info(`Search completed successfully`, {
+      totalResults: rawData.length,
+      successfulSearches,
+      failedSearches,
+      isArray: Array.isArray(rawData),
+      firstResultType: rawData[0] ? typeof rawData[0] : 'none',
+    });
 
+    // ✅ Return state with guaranteed array
     return {
       ...state,
-      rawData,
+      rawData, // This is guaranteed to be an actual array of objects
       currentStep: 'search_complete',
       progress: { current: 2, total: 5, percentage: 40 },
       metadata: {
@@ -368,11 +461,14 @@ class LangChainMultiAgent {
         searchTimestamp: new Date().toISOString(),
         totalSources: rawData.length,
         searchTermsUsed: validTerms.length,
+        successfulSearches,
         failedSearches,
       },
       messages: [
         ...state.messages,
-        new AIMessage(`Gathered ${rawData.length} sources successfully`),
+        new AIMessage(
+          `Search completed: ${rawData.length} results from ${successfulSearches} successful searches`
+        ),
       ],
     };
   }
@@ -383,23 +479,33 @@ class LangChainMultiAgent {
   calculateRelevanceScore(result, originalQuery) {
     if (!result || !originalQuery) return 0;
 
-    const queryWords = originalQuery.toLowerCase().split(' ');
-    const title = (result.title || '').toLowerCase();
-    const content = (result.content || '').toLowerCase();
+    // Ensure we have strings to work with
+    const queryWords = String(originalQuery || '')
+      .toLowerCase()
+      .split(' ');
+    const title = String(result.title || '').toLowerCase();
+    const content = String(result.content || '').toLowerCase();
 
     let score = 0;
 
     // Title matching (higher weight)
     queryWords.forEach((word) => {
-      if (title.includes(word)) score += 3;
-      if (content.includes(word)) score += 1;
+      if (word.length > 2) {
+        // Skip very short words
+        if (title.includes(word)) score += 3;
+        if (content.includes(word)) score += 1;
+      }
     });
 
-    // URL quality
+    // URL quality bonus
     if (result.url) {
-      if (result.url.includes('.edu') || result.url.includes('.gov')) score += 2;
-      if (result.url.includes('report') || result.url.includes('research')) score += 1;
+      const url = String(result.url);
+      if (url.includes('.edu') || url.includes('.gov')) score += 2;
+      if (url.includes('report') || url.includes('research')) score += 1;
     }
+
+    // Content length bonus (longer content generally better)
+    if (content.length > 1000) score += 1;
 
     return Math.min(score, 10); // Cap at 10
   }

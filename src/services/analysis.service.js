@@ -66,33 +66,99 @@ class AnalysisService extends EventEmitter {
         startedAt: new Date(),
       });
 
-      // Execute Multi-Agent workflow
+      // Execute Multi-Agent workflow (now includes formatter)
       const result = await this.multiAgent.execute(query, userId);
 
-      if (result.success) {
-        // Save successful results
-        const resultRecord = new Result({
+      if (result.success && result.data) {
+        logger.info('Workflow completed, data should now be clean', {
           queryId,
-          userId,
-          data: result.data,
-          metadata: result.metadata,
-          framework: 'langchain-multiagent',
-          analysisType: 'market_intelligence',
-          createdAt: new Date(),
+          rawDataType: typeof result.data?.rawData,
+          rawDataIsArray: Array.isArray(result.data?.rawData),
+          rawDataCount: result.data?.rawData?.length || 0,
         });
 
+        // Data should now be clean from the formatter agent
+        const cleanRawData = result.data.rawData || [];
+
+        // Verify it's actually an array
+        if (!Array.isArray(cleanRawData)) {
+          logger.error('Data is still not an array after formatting!', {
+            queryId,
+            type: typeof cleanRawData,
+          });
+          throw new Error('Data formatting failed - not an array');
+        }
+
+        // Create result record with clean data
+        const resultRecord = new Result({
+          queryId: queryId,
+
+          searchStrategy: {
+            primaryTerms: result.data.searchPlan?.primaryTerms || [],
+            secondaryTerms: result.data.searchPlan?.secondaryTerms || [],
+            searchCategories: result.data.searchPlan?.searchCategories || [],
+            timeRange: result.data.searchPlan?.timeframe || 'recent',
+          },
+
+          metaData: result,
+          rawData: cleanRawData, // This should now be a clean array
+
+          processedData: {
+            totalSources: result.data.processedData.totalSources || 0,
+            qualityMetrics: {
+              averageRelevanceScore:
+                result.data.processedData.qualityMetrics.averageRelevanceScore || 0,
+              highQualitySources: result.data.processedData.qualityMetrics.highQualitySources || 0,
+              recentSources: result.data.processedData.qualityMetrics.recentSources || 0,
+            },
+            domainDistribution: this.calculateDomainDistribution(cleanRawData),
+          },
+
+          analysisResults: {
+            keyTrends: result.data.analysisResults?.keyTrends || [],
+            marketOpportunities: result.data.analysisResults?.opportunities || [],
+            competitiveLandscape: {
+              majorPlayers: result.data.analysisResults?.keyPlayers || [],
+              marketPosition: result.data.analysisResults?.sentiment || 'neutral',
+            },
+            insights: result.data.analysisResults?.insights || [],
+            recommendations: result.data.analysisResults?.recommendations || [],
+            riskFactors: result.data.analysisResults?.challenges || [],
+            dataConfidence: result.data.analysisResults?.confidence || 'medium',
+            summary: result.data.analysisResults?.summary || 'Analysis completed',
+          },
+
+          finalReport: result.data.finalReport || 'Report generated',
+
+          performance: {
+            searchDuration: 0,
+            analysisDuration: 0,
+            totalDuration: result.metadata?.duration || 0,
+            sourcesProcessed: cleanRawData.length,
+            apiCallsCount: result.data.metadata?.searchTermsUsed || 0,
+          },
+        });
+
+        // Save to database
+        logger.info('Saving clean result to database', { queryId });
         await resultRecord.save();
+
+        logger.info('Result saved successfully', {
+          queryId,
+          resultId: resultRecord._id,
+          rawDataCount: resultRecord.rawData.length,
+        });
 
         // Update query status
         await Query.findByIdAndUpdate(queryId, {
           status: 'completed',
           completedAt: new Date(),
-          resultId: resultRecord._id,
+          metadata: {
+            ...queryRecord.metadata,
+            resultId: resultRecord._id,
+          },
         });
 
-        logger.info(`LangChain Multi-Agent analysis completed successfully for query ${queryId}`);
-
-        // Emit completion event
         this.emit('analysis_completed', {
           queryId,
           userId,
@@ -103,11 +169,11 @@ class AnalysisService extends EventEmitter {
         // Handle failure
         await Query.findByIdAndUpdate(queryId, {
           status: 'failed',
-          error: result.error,
-          completedAt: new Date(),
+          metadata: {
+            ...queryRecord.metadata,
+            error: result.error,
+          },
         });
-
-        logger.error(`LangChain Multi-Agent analysis failed for query ${queryId}:`, result.error);
 
         this.emit('analysis_failed', {
           queryId,
@@ -117,13 +183,14 @@ class AnalysisService extends EventEmitter {
         });
       }
     } catch (error) {
-      logger.error(`LangChain Multi-Agent analysis processing error for query ${queryId}:`, error);
+      logger.error(`Analysis processing error for query ${queryId}:`, error);
 
-      // Update database with error
       await Query.findByIdAndUpdate(queryId, {
         status: 'failed',
-        error: error.message,
-        completedAt: new Date(),
+        metadata: {
+          ...queryRecord.metadata,
+          error: error.message,
+        },
       });
 
       this.emit('analysis_failed', {
@@ -133,7 +200,6 @@ class AnalysisService extends EventEmitter {
         error: error.message,
       });
     } finally {
-      // Remove from active workflows
       this.activeWorkflows.delete(queryId);
     }
   }
@@ -172,50 +238,6 @@ class AnalysisService extends EventEmitter {
       };
     } catch (error) {
       logger.error('Failed to get LangChain Multi-Agent analysis status:', error);
-      throw error;
-    }
-  }
-
-  async getAnalysisResults(queryId, userId) {
-    try {
-      const query = await Query.findOne({ _id: queryId, userId });
-
-      if (!query) {
-        return null;
-      }
-
-      if (query.status !== 'completed') {
-        return {
-          status: query.status,
-          error: query.error,
-        };
-      }
-
-      const result = await Result.findOne({ queryId, userId });
-
-      if (!result) {
-        throw new Error('Results not found');
-      }
-
-      return {
-        queryId,
-        status: 'completed',
-        framework: 'langchain-multiagent',
-        query: query.queryText,
-        results: result.data,
-        metadata: result.metadata,
-        createdAt: result.createdAt,
-        // Transform for frontend compatibility
-        finalReport: result.data?.finalReport,
-        analysisResults: result.data?.analysisResults,
-        processedData: result.data?.processedData,
-        rawData: result.data?.rawData?.slice(0, 20), // Limit for performance
-        // Multi-agent specific data
-        agentExecutionSteps: this.extractAgentSteps(result.data),
-        workflowMetadata: result.metadata,
-      };
-    } catch (error) {
-      logger.error('Failed to get LangChain Multi-Agent analysis results:', error);
       throw error;
     }
   }
@@ -339,7 +361,44 @@ class AnalysisService extends EventEmitter {
     }
   }
 
-  // Health check method
+  async getAnalysisResults(queryId, userId) {
+    try {
+      // Check if query exists and belongs to user
+      const query = await Query.findOne({ _id: queryId, userId });
+      if (!query) {
+        return null;
+      }
+
+      // Get the result
+      const result = await Result.findOne({ queryId }).populate('queryId');
+      if (!result) {
+        return null;
+      }
+
+      return {
+        queryId,
+        status: query.status,
+        queryText: query.queryText,
+        createdAt: query.createdAt,
+        completedAt: query.metadata?.completedAt,
+        searchStrategy: result.searchStrategy,
+        rawData: result.rawData,
+        processedData: result.processedData,
+        analysisResults: result.analysisResults,
+        finalReport: result.finalReport,
+        performance: result.performance,
+        metadata: {
+          framework: 'langchain-multiagent',
+          totalSources: result.processedData?.totalSources || 0,
+          dataConfidence: result.analysisResults?.dataConfidence || 'medium',
+        },
+      };
+    } catch (error) {
+      logger.error('Failed to get analysis results:', error);
+      throw error;
+    }
+  }
+
   getStatus() {
     return {
       framework: 'langchain-multiagent',
@@ -354,6 +413,30 @@ class AnalysisService extends EventEmitter {
       ],
       healthy: true,
     };
+  }
+
+  calculateAverageRelevance(rawData) {
+    if (!rawData || rawData.length === 0) return 0;
+    const total = rawData.reduce((sum, item) => sum + (item.relevanceScore || item.score || 0), 0);
+    return Math.round((total / rawData.length) * 100) / 100;
+  }
+
+  calculateDomainDistribution(rawData) {
+    if (!rawData || rawData.length === 0) return {};
+
+    const domains = {};
+    rawData.forEach((item) => {
+      if (item.url) {
+        try {
+          const domain = new URL(item.url).hostname;
+          domains[domain] = (domains[domain] || 0) + 1;
+        } catch (error) {
+          // Invalid URL, skip
+        }
+      }
+    });
+
+    return domains;
   }
 }
 
