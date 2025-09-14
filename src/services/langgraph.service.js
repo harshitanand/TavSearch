@@ -1,21 +1,21 @@
-const LangChainMultiAgent = require('../workflows/LangChainMultiAgent');
+const MarketIntelligenceGraph = require('../workflows/MarketIntelligenceGraph');
 const Query = require('../models/Query');
 const Result = require('../models/Result');
 const { logger } = require('../utils/logger');
 const { EventEmitter } = require('events');
 
-class AnalysisService extends EventEmitter {
+class LangGraphService extends EventEmitter {
   constructor(config) {
     super();
     this.config = config;
-    this.multiAgent = new LangChainMultiAgent(config);
+    this.graph = new MarketIntelligenceGraph(config);
     this.activeWorkflows = new Map();
     this.maxConcurrentWorkflows = config.analysis?.maxConcurrent || 5;
   }
 
   static async startAnalysis({ userId, query, priority = 1, tags = [] }) {
     // Check concurrent workflow limit
-    if (this.activeWorkflows?.size >= this.maxConcurrentWorkflows) {
+    if (this.activeWorkflows.size >= this.maxConcurrentWorkflows) {
       throw new Error('Maximum concurrent analyses reached. Please try again later.');
     }
 
@@ -27,7 +27,7 @@ class AnalysisService extends EventEmitter {
         priority,
         tags,
         status: 'pending',
-        framework: 'langchain-multiagent',
+        framework: 'langgraph',
         createdAt: new Date(),
       });
 
@@ -48,17 +48,17 @@ class AnalysisService extends EventEmitter {
         queryId,
         status: 'started',
         estimatedDuration: '2-5 minutes',
-        framework: 'langchain-multiagent',
+        framework: 'langgraph',
       };
     } catch (error) {
-      logger.error('Failed to start LangChain Multi-Agent analysis:', error);
+      logger.error('Failed to start LangGraph analysis:', error);
       throw error;
     }
   }
 
   static async processAnalysisAsync(queryId, query, userId, queryRecord) {
     try {
-      logger.info(`Starting LangChain Multi-Agent analysis for query ${queryId}`);
+      logger.info(`Starting LangGraph analysis for query ${queryId}`);
 
       // Update status to processing
       await Query.findByIdAndUpdate(queryId, {
@@ -66,8 +66,8 @@ class AnalysisService extends EventEmitter {
         startedAt: new Date(),
       });
 
-      // Execute Multi-Agent workflow
-      const result = await this.multiAgent.execute(query, userId);
+      // Execute LangGraph workflow
+      const result = await this.graph.execute(query, userId);
 
       if (result.success) {
         // Save successful results
@@ -76,7 +76,7 @@ class AnalysisService extends EventEmitter {
           userId,
           data: result.data,
           metadata: result.metadata,
-          framework: 'langchain-multiagent',
+          framework: 'langgraph',
           analysisType: 'market_intelligence',
           createdAt: new Date(),
         });
@@ -90,7 +90,7 @@ class AnalysisService extends EventEmitter {
           resultId: resultRecord._id,
         });
 
-        logger.info(`LangChain Multi-Agent analysis completed successfully for query ${queryId}`);
+        logger.info(`LangGraph analysis completed successfully for query ${queryId}`);
 
         // Emit completion event
         this.emit('analysis_completed', {
@@ -107,7 +107,7 @@ class AnalysisService extends EventEmitter {
           completedAt: new Date(),
         });
 
-        logger.error(`LangChain Multi-Agent analysis failed for query ${queryId}:`, result.error);
+        logger.error(`LangGraph analysis failed for query ${queryId}:`, result.error);
 
         this.emit('analysis_failed', {
           queryId,
@@ -117,7 +117,7 @@ class AnalysisService extends EventEmitter {
         });
       }
     } catch (error) {
-      logger.error(`LangChain Multi-Agent analysis processing error for query ${queryId}:`, error);
+      logger.error(`LangGraph analysis processing error for query ${queryId}:`, error);
 
       // Update database with error
       await Query.findByIdAndUpdate(queryId, {
@@ -163,7 +163,7 @@ class AnalysisService extends EventEmitter {
         queryId,
         status: query.status,
         query: query.queryText,
-        framework: 'langchain-multiagent',
+        framework: 'langgraph',
         createdAt: query.createdAt,
         startedAt: query.startedAt,
         completedAt: query.completedAt,
@@ -171,7 +171,7 @@ class AnalysisService extends EventEmitter {
         error: query.error,
       };
     } catch (error) {
-      logger.error('Failed to get LangChain Multi-Agent analysis status:', error);
+      logger.error('Failed to get LangGraph analysis status:', error);
       throw error;
     }
   }
@@ -200,7 +200,7 @@ class AnalysisService extends EventEmitter {
       return {
         queryId,
         status: 'completed',
-        framework: 'langchain-multiagent',
+        framework: 'langgraph',
         query: query.queryText,
         results: result.data,
         metadata: result.metadata,
@@ -210,37 +210,11 @@ class AnalysisService extends EventEmitter {
         analysisResults: result.data?.analysisResults,
         processedData: result.data?.processedData,
         rawData: result.data?.rawData?.slice(0, 20), // Limit for performance
-        // Multi-agent specific data
-        agentExecutionSteps: this.extractAgentSteps(result.data),
-        workflowMetadata: result.metadata,
       };
     } catch (error) {
-      logger.error('Failed to get LangChain Multi-Agent analysis results:', error);
+      logger.error('Failed to get LangGraph analysis results:', error);
       throw error;
     }
-  }
-
-  extractAgentSteps(data) {
-    if (!data || !data.messages) return [];
-
-    return data.messages.map((message, index) => ({
-      step: index + 1,
-      agent: this.identifyAgentFromMessage(message, index),
-      message: message.content || message.text,
-      timestamp: data.metadata?.timestamps?.[index] || new Date().toISOString(),
-    }));
-  }
-
-  identifyAgentFromMessage(message, index) {
-    const agentMap = {
-      0: 'User Input',
-      1: 'Planner Agent',
-      2: 'Search Agent',
-      3: 'Analysis Agent',
-      4: 'Synthesis Agent',
-      5: 'Validator Agent',
-    };
-    return agentMap[index] || 'Unknown Agent';
   }
 
   static async cancelAnalysis(queryId, userId) {
@@ -264,11 +238,11 @@ class AnalysisService extends EventEmitter {
       // Remove from active workflows
       this.activeWorkflows.delete(queryId);
 
-      logger.info(`LangChain Multi-Agent analysis cancelled: ${queryId}`);
+      logger.info(`LangGraph analysis cancelled: ${queryId}`);
 
       return { success: true };
     } catch (error) {
-      logger.error('Failed to cancel LangChain Multi-Agent analysis:', error);
+      logger.error('Failed to cancel LangGraph analysis:', error);
       throw error;
     }
   }
@@ -289,7 +263,7 @@ class AnalysisService extends EventEmitter {
         tags: originalQuery.tags,
       });
     } catch (error) {
-      logger.error('Failed to retry LangChain Multi-Agent analysis:', error);
+      logger.error('Failed to retry LangGraph analysis:', error);
       throw error;
     }
   }
@@ -298,7 +272,7 @@ class AnalysisService extends EventEmitter {
     try {
       const { limit = 10, skip = 0, status, sortBy = 'createdAt', sortOrder = 'desc' } = options;
 
-      const query = { userId, framework: 'langchain-multiagent' };
+      const query = { userId, framework: 'langgraph' };
       if (status) {
         query.status = status;
       }
@@ -334,7 +308,7 @@ class AnalysisService extends EventEmitter {
         },
       };
     } catch (error) {
-      logger.error('Failed to get user LangChain Multi-Agent analyses:', error);
+      logger.error('Failed to get user LangGraph analyses:', error);
       throw error;
     }
   }
@@ -342,19 +316,12 @@ class AnalysisService extends EventEmitter {
   // Health check method
   getStatus() {
     return {
-      framework: 'langchain-multiagent',
+      framework: 'langgraph',
       activeWorkflows: this.activeWorkflows.size,
       maxConcurrentWorkflows: this.maxConcurrentWorkflows,
-      agents: [
-        'PlannerAgent - Search strategy creation',
-        'SearchAgent - Data gathering via Tavily API',
-        'AnalysisAgent - Data processing and analysis',
-        'SynthesisAgent - Report generation',
-        'ValidatorAgent - Quality control',
-      ],
       healthy: true,
     };
   }
 }
 
-module.exports = AnalysisService;
+module.exports = LangGraphService;

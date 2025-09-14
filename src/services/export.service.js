@@ -3,7 +3,7 @@ const PDFDocument = require('pdfkit');
 const { logger } = require('../utils/logger');
 
 class ExportService {
-  async generateExport(result, format) {
+  static async generateExport(result, format) {
     try {
       switch (format.toLowerCase()) {
         case 'json':
@@ -31,31 +31,31 @@ class ExportService {
       analysisResults: result.analysisResults,
       processedData: result.processedData,
       performance: result.performance,
-      generatedAt: new Date().toISOString()
+      generatedAt: new Date().toISOString(),
     };
   }
 
   exportToCSV(result) {
     const { analysisResults } = result;
     let csv = 'Category,Item\n';
-    
+
     // Key trends
     if (analysisResults.keyTrends) {
-      analysisResults.keyTrends.forEach(trend => {
+      analysisResults.keyTrends.forEach((trend) => {
         csv += `Key Trend,"${trend.replace(/"/g, '""')}"\n`;
       });
     }
 
     // Recommendations
     if (analysisResults.recommendations) {
-      analysisResults.recommendations.forEach(rec => {
+      analysisResults.recommendations.forEach((rec) => {
         csv += `Recommendation,"${rec.replace(/"/g, '""')}"\n`;
       });
     }
 
     // Risk factors
     if (analysisResults.riskFactors) {
-      analysisResults.riskFactors.forEach(risk => {
+      analysisResults.riskFactors.forEach((risk) => {
         csv += `Risk Factor,"${risk.replace(/"/g, '""')}"\n`;
       });
     }
@@ -63,33 +63,33 @@ class ExportService {
     return csv;
   }
 
-  async exportToExcel(result) {
+  static async exportToExcel(result) {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Market Analysis');
 
     // Add headers
     worksheet.columns = [
       { header: 'Category', key: 'category', width: 20 },
-      { header: 'Item', key: 'item', width: 80 }
+      { header: 'Item', key: 'item', width: 80 },
     ];
 
     // Add data
     const { analysisResults } = result;
-    
+
     if (analysisResults.keyTrends) {
-      analysisResults.keyTrends.forEach(trend => {
+      analysisResults.keyTrends.forEach((trend) => {
         worksheet.addRow({ category: 'Key Trend', item: trend });
       });
     }
 
     if (analysisResults.recommendations) {
-      analysisResults.recommendations.forEach(rec => {
+      analysisResults.recommendations.forEach((rec) => {
         worksheet.addRow({ category: 'Recommendation', item: rec });
       });
     }
 
     if (analysisResults.riskFactors) {
-      analysisResults.riskFactors.forEach(risk => {
+      analysisResults.riskFactors.forEach((risk) => {
         worksheet.addRow({ category: 'Risk Factor', item: risk });
       });
     }
@@ -99,19 +99,19 @@ class ExportService {
     worksheet.getRow(1).fill = {
       type: 'pattern',
       pattern: 'solid',
-      fgColor: { argb: 'FFE0E0E0' }
+      fgColor: { argb: 'FFE0E0E0' },
     };
 
     return await workbook.xlsx.writeBuffer();
   }
 
-  async exportToPDF(result) {
+  static async exportToPDF(result) {
     return new Promise((resolve, reject) => {
       try {
         const doc = new PDFDocument();
         const chunks = [];
 
-        doc.on('data', chunk => chunks.push(chunk));
+        doc.on('data', (chunk) => chunks.push(chunk));
         doc.on('end', () => resolve(Buffer.concat(chunks)));
 
         // Add content
@@ -125,7 +125,7 @@ class ExportService {
         // Key trends
         if (result.analysisResults?.keyTrends) {
           doc.fontSize(16).text('Key Trends:', { underline: true });
-          result.analysisResults.keyTrends.forEach(trend => {
+          result.analysisResults.keyTrends.forEach((trend) => {
             doc.fontSize(12).text(`• ${trend}`);
           });
           doc.moveDown();
@@ -134,7 +134,7 @@ class ExportService {
         // Recommendations
         if (result.analysisResults?.recommendations) {
           doc.fontSize(16).text('Recommendations:', { underline: true });
-          result.analysisResults.recommendations.forEach(rec => {
+          result.analysisResults.recommendations.forEach((rec) => {
             doc.fontSize(12).text(`• ${rec}`);
           });
           doc.moveDown();
@@ -143,7 +143,7 @@ class ExportService {
         // Risk factors
         if (result.analysisResults?.riskFactors) {
           doc.fontSize(16).text('Risk Factors:', { underline: true });
-          result.analysisResults.riskFactors.forEach(risk => {
+          result.analysisResults.riskFactors.forEach((risk) => {
             doc.fontSize(12).text(`• ${risk}`);
           });
         }
@@ -157,7 +157,7 @@ class ExportService {
 
   exportToHTML(result) {
     const { analysisResults, query } = result;
-    
+
     return `
       <!DOCTYPE html>
       <html>
@@ -175,26 +175,38 @@ class ExportService {
         <h1>Market Intelligence Report</h1>
         <p><strong>Query:</strong> ${query?.queryText || 'N/A'}</p>
         
-        ${analysisResults?.keyTrends ? `
+        ${
+          analysisResults?.keyTrends
+            ? `
           <h2>Key Trends</h2>
           <ul>
-            ${analysisResults.keyTrends.map(trend => `<li>${trend}</li>`).join('')}
+            ${analysisResults.keyTrends.map((trend) => `<li>${trend}</li>`).join('')}
           </ul>
-        ` : ''}
+        `
+            : ''
+        }
         
-        ${analysisResults?.recommendations ? `
+        ${
+          analysisResults?.recommendations
+            ? `
           <h2>Recommendations</h2>
           <ul>
-            ${analysisResults.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+            ${analysisResults.recommendations.map((rec) => `<li>${rec}</li>`).join('')}
           </ul>
-        ` : ''}
+        `
+            : ''
+        }
         
-        ${analysisResults?.riskFactors ? `
+        ${
+          analysisResults?.riskFactors
+            ? `
           <h2>Risk Factors</h2>
           <ul>
-            ${analysisResults.riskFactors.map(risk => `<li>${risk}</li>`).join('')}
+            ${analysisResults.riskFactors.map((risk) => `<li>${risk}</li>`).join('')}
           </ul>
-        ` : ''}
+        `
+            : ''
+        }
         
         <div class="metadata">
           <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
@@ -206,4 +218,4 @@ class ExportService {
   }
 }
 
-module.exports = new ExportService();
+module.exports = ExportService;

@@ -1,202 +1,173 @@
+const UserService = require('../services/user.service');
 const User = require('../models/User');
-const Result = require('../models/Result');
-const Query = require('../models/Query');
-const { logger } = require('../utils/logger');
-const { ApiResponse } = require('../utils/response');
-const { ValidationError } = require('../utils/errors');
+const { catchAsync } = require('../middleware/error.middleware');
+const { AuthorizationError, NotFoundError, ValidationError } = require('../utils/errors');
+const logger = require('../utils/logger');
 
 class UserController {
-  async getUserProfile(req, res, next) {
-    try {
-      const userId = req.user.userId;
-      const user = await User.findOne({ userId });
+  /**
+   * Get user profile with settings and subscription info
+   */
+  static getUserProfile = catchAsync(async (req, res) => {
+    const userId = req.user.userId;
 
-      if (!user) {
-        // Create user if doesn't exist (for demo)
-        const newUser = new User({
-          userId,
-          email: req.user.email || `${userId}@demo.com`,
-          name: `User ${userId}`
-        });
-        await newUser.save();
-        
-        res.json(new ApiResponse(true, 'User profile retrieved', newUser));
-      } else {
-        res.json(new ApiResponse(true, 'User profile retrieved', user));
-      }
+    const user = await User.findOne({ userId }).select('-__v -password').lean();
 
-    } catch (error) {
-      logger.error('Failed to get user profile:', error);
-      next(error);
+    if (!user) {
+      throw new NotFoundError('User profile not found');
     }
-  }
 
-  async updateUserProfile(req, res, next) {
-    try {
-      const userId = req.user.userId;
-      const updates = req.body;
+    logger.info('User profile retrieved', { userId });
 
-      // Filter allowed updates
-      const allowedUpdates = ['name', 'settings'];
-      const filteredUpdates = {};
-      
-      allowedUpdates.forEach(key => {
-        if (updates[key] !== undefined) {
-          filteredUpdates[key] = updates[key];
-        }
-      });
+    res.json({
+      success: true,
+      message: 'User profile retrieved',
+      data: user,
+    });
+  });
 
-      const user = await User.findOneAndUpdate(
-        { userId },
-        filteredUpdates,
-        { new: true, upsert: true }
-      );
+  /**
+   * Update user profile and preferences
+   */
+  static updateUserProfile = catchAsync(async (req, res) => {
+    const userId = req.user.userId;
+    const updateData = req.body;
 
-      res.json(new ApiResponse(true, 'Profile updated successfully', user));
+    // Remove sensitive fields that shouldn't be updated via this endpoint
+    delete updateData.userId;
+    delete updateData.subscription;
+    delete updateData.usage;
 
-    } catch (error) {
-      logger.error('Failed to update user profile:', error);
-      next(error);
+    const updatedUser = await User.findOneAndUpdate(
+      { userId },
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).select('-__v -password');
+
+    if (!updatedUser) {
+      throw new NotFoundError('User not found');
     }
-  }
 
-  async getUserAnalytics(req, res, next) {
-    try {
-      const userId = req.user.userId;
-      const { startDate, endDate } = req.query;
+    logger.info('User profile updated', {
+      userId,
+      updatedFields: Object.keys(updateData),
+    });
 
-      const dateRange = {};
-      if (startDate) dateRange.startDate = new Date(startDate);
-      if (endDate) dateRange.endDate = new Date(endDate);
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: updatedUser,
+    });
+  });
 
-      const analytics = await Result.getAnalyticsSummary(userId, dateRange);
-      
-      // Get query statistics
-      const queryStats = await Query.aggregate([
-        { $match: { userId } },
-        {
-          $group: {
-            _id: '$status',
-            count: { $sum: 1 }
-          }
-        }
-      ]);
+  /**
+   * Get user usage statistics and analytics
+   */
+  static getUserUsage = catchAsync(async (req, res) => {
+    const userId = req.user.userId;
+    const { timeframe = '30d' } = req.query;
 
-      res.json(new ApiResponse(true, 'Analytics retrieved successfully', {
-        summary: analytics[0] || {},
-        queryStats: queryStats.reduce((acc, stat) => {
-          acc[stat._id] = stat.count;
-          return acc;
-        }, {})
-      }));
+    const usage = await UserService.getUserUsage(userId, timeframe);
 
-    } catch (error) {
-      logger.error('Failed to get user analytics:', error);
-      next(error);
-    }
-  }
+    res.json({
+      success: true,
+      message: 'User usage statistics retrieved',
+      data: usage,
+      timeframe,
+    });
+  });
 
-  async getUserUsage(req, res, next) {
-    try {
-      const userId = req.user.userId;
-      const user = await User.findOne({ userId });
+  /**
+   * Get user analytics (admin or user's own)
+   */
+  static getUserAnalytics = catchAsync(async (req, res) => {
+    const userId = req.user.userId;
+    const { timeframe = '30d', metrics } = req.query;
 
-      if (!user) {
-        throw new ValidationError('User not found', 404);
-      }
+    const analytics = await UserService.getUserAnalytics(userId, {
+      timeframe,
+      metrics: metrics ? metrics.split(',') : undefined,
+    });
 
-      const currentMonth = new Date();
-      currentMonth.setDate(1);
-      currentMonth.setHours(0, 0, 0, 0);
+    res.json({
+      success: true,
+      message: 'User analytics retrieved successfully',
+      data: analytics,
+    });
+  });
 
-      const monthlyQueries = await Query.countDocuments({
-        userId,
-        createdAt: { $gte: currentMonth }
-      });
-
-      const usage = {
-        totalAnalyses: user.usage.totalAnalyses,
-        monthlyAnalyses: monthlyQueries,
-        lastAnalysis: user.usage.lastAnalysis,
-        subscription: user.subscription,
-        limits: this.getUserLimits(user.subscription.plan),
-        remainingAnalyses: this.getRemainingAnalyses(user.subscription.plan, monthlyQueries)
-      };
-
-      res.json(new ApiResponse(true, 'Usage statistics retrieved', usage));
-
-    } catch (error) {
-      logger.error('Failed to get user usage:', error);
-      next(error);
-    }
-  }
-
-  async getAllUsers(req, res, next) {
-    try {
-      const { limit = 20, skip = 0, search } = req.query;
-      
-      const query = {};
-      if (search) {
-        query.$or = [
-          { email: { $regex: search, $options: 'i' } },
-          { name: { $regex: search, $options: 'i' } }
-        ];
-      }
-
-      const users = await User.find(query)
-        .select('-__v')
-        .sort({ createdAt: -1 })
-        .limit(parseInt(limit))
-        .skip(parseInt(skip));
-
-      const total = await User.countDocuments(query);
-
-      res.json(new ApiResponse(true, 'Users retrieved successfully', {
-        users,
-        pagination: {
-          total,
-          limit: parseInt(limit),
-          skip: parseInt(skip),
-          hasMore: skip + users.length < total
-        }
-      }));
-
-    } catch (error) {
-      logger.error('Failed to get all users:', error);
-      next(error);
-    }
-  }
-
-  async getUserById(req, res, next) {
-    try {
-      const { userId } = req.params;
-      const user = await User.findOne({ userId });
-
-      if (!user) {
-        throw new ValidationError('User not found', 404);
-      }
-
-      res.json(new ApiResponse(true, 'User retrieved successfully', user));
-
-    } catch (error) {
-      logger.error('Failed to get user by ID:', error);
-      next(error);
-    }
-  }
-
-  getUserLimits(plan) {
-    const limits = {
-      free: { monthlyAnalyses: 10, concurrentAnalyses: 1 },
-      premium: { monthlyAnalyses: 100, concurrentAnalyses: 3 },
-      enterprise: { monthlyAnalyses: 1000, concurrentAnalyses: 10 }
+  /**
+   * Get all users (admin only)
+   */
+  static getAllUsers = catchAsync(async (req, res) => {
+    const queryOptions = {
+      ...req.query,
+      populate: req.query.populate ? req.query.populate.split(',') : [],
     };
-    return limits[plan] || limits.free;
-  }
 
-  getRemainingAnalyses(plan, used) {
-    const limits = this.getUserLimits(plan);
-    return Math.max(0, limits.monthlyAnalyses - used);
-  }
+    const result = await UserService.getAllUsers(queryOptions);
+
+    logger.info('All users retrieved', {
+      adminUserId: req.user.userId,
+      page: req.query.page || 1,
+      limit: req.query.limit || 20,
+      total: result.pagination?.total,
+    });
+
+    res.json({
+      success: true,
+      message: 'Users retrieved successfully',
+      data: result.users,
+      pagination: result.pagination,
+    });
+  });
+
+  /**
+   * Get user by ID (admin only)
+   */
+  static getUserById = catchAsync(async (req, res) => {
+    const { userId } = req.params;
+
+    const user = await User.findOne({ userId }).select('-__v -password').lean();
+
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    logger.info('User retrieved by admin', {
+      adminUserId: req.user.userId,
+      targetUserId: userId,
+    });
+
+    res.json({
+      success: true,
+      message: 'User retrieved successfully',
+      data: user,
+    });
+  });
+
+  /**
+   * Update user subscription (admin only)
+   */
+  static updateUserSubscription = catchAsync(async (req, res) => {
+    const { userId } = req.params;
+    const { plan, status } = req.body;
+
+    const updatedUser = await UserService.updateSubscription(userId, { plan, status });
+
+    logger.info('User subscription updated', {
+      adminUserId: req.user.userId,
+      targetUserId: userId,
+      newPlan: plan,
+      newStatus: status,
+    });
+
+    res.json({
+      success: true,
+      message: 'User subscription updated successfully',
+      data: updatedUser,
+    });
+  });
 }
 
-module.exports = new UserController();
+module.exports = UserController;

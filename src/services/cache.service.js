@@ -8,10 +8,10 @@ class CacheService {
     this.connected = false;
   }
 
-  async connect() {
+  static async connect() {
     try {
       this.client = redis.createClient({
-        url: config.redis.url
+        url: config.redis.url,
       });
 
       this.client.on('error', (err) => {
@@ -31,7 +31,7 @@ class CacheService {
     }
   }
 
-  async setAnalysisResults(queryId, results, ttl = config.redis.ttl) {
+  static async setAnalysisResults(queryId, results, ttl = config.redis.ttl) {
     if (!this.connected) return false;
 
     try {
@@ -44,7 +44,7 @@ class CacheService {
     }
   }
 
-  async getAnalysisResults(queryId) {
+  static async getAnalysisResults(queryId) {
     if (!this.connected) return null;
 
     try {
@@ -57,7 +57,8 @@ class CacheService {
     }
   }
 
-  async setUserSession(userId, sessionData, ttl = 86400) { // 24 hours
+  static async setUserSession(userId, sessionData, ttl = 86400) {
+    // 24 hours
     if (!this.connected) return false;
 
     try {
@@ -70,7 +71,7 @@ class CacheService {
     }
   }
 
-  async getUserSession(userId) {
+  static async getUserSession(userId) {
     if (!this.connected) return null;
 
     try {
@@ -83,7 +84,7 @@ class CacheService {
     }
   }
 
-  async invalidate(pattern) {
+  static async invalidate(pattern) {
     if (!this.connected) return false;
 
     try {
@@ -98,7 +99,7 @@ class CacheService {
     }
   }
 
-  async disconnect() {
+  static async disconnect() {
     if (this.client) {
       await this.client.disconnect();
       this.connected = false;
@@ -107,4 +108,4 @@ class CacheService {
   }
 }
 
-module.exports = new CacheService();
+module.exports = CacheService;

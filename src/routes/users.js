@@ -1,47 +1,32 @@
 const express = require('express');
-const userController = require('../controllers/user.controller');
+const UserController = require('../controllers/user.controller');
 const { authenticate, authorize } = require('../middleware/auth');
-const { validateQueryParams } = require('../middleware/validation');
+const { validateQueryParams, validateUserUpdate } = require('../middleware/validation');
 
 const router = express.Router();
 
-// Get user profile
-router.get('/profile', 
-  authenticate,
-  userController.getUserProfile
-);
+// User profile routes
+router.get('/profile', authenticate, UserController.getUserProfile);
+// router.put('/profile', authenticate, validateUserUpdate, UserController.updateUserProfile);
 
-// Update user profile
-router.put('/profile', 
-  authenticate,
-  userController.updateUserProfile
-);
-
-// Get user analytics
-router.get('/analytics', 
-  authenticate,
-  validateQueryParams,
-  userController.getUserAnalytics
-);
-
-// Get user usage stats
-router.get('/usage', 
-  authenticate,
-  userController.getUserUsage
-);
+// User analytics and usage
+router.get('/analytics', authenticate, validateQueryParams, UserController.getUserAnalytics);
+router.get('/usage', authenticate, UserController.getUserUsage);
 
 // Admin routes
-router.get('/', 
+router.get(
+  '/',
   authenticate,
   authorize(['admin']),
   validateQueryParams,
-  userController.getAllUsers
+  UserController.getAllUsers
 );
-
-router.get('/:userId', 
+router.get('/:userId', authenticate, authorize(['admin']), UserController.getUserById);
+router.put(
+  '/:userId/subscription',
   authenticate,
   authorize(['admin']),
-  userController.getUserById
+  UserController.updateUserSubscription
 );
 
 module.exports = router;

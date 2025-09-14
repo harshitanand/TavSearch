@@ -1,210 +1,143 @@
-const Query = require('../models/Query');
-const Result = require('../models/Result');
-const User = require('../models/User');
-const { logger } = require('../utils/logger');
-const { ApiResponse } = require('../utils/response');
+const AnalyticsService = require('../services/analytics.service');
+const { catchAsync } = require('../middleware/error.middleware');
+const { AuthorizationError } = require('../utils/errors');
+const logger = require('../utils/logger');
 
 class AnalyticsController {
-  async getSystemAnalytics(req, res, next) {
-    try {
-      const { startDate, endDate } = req.query;
-      const dateFilter = this.buildDateFilter(startDate, endDate);
+  /**
+   * Get system-wide analytics (admin only)
+   */
+  static getSystemAnalytics = catchAsync(async (req, res) => {
+    const { timeframe = '30d', metrics } = req.query;
 
-      const [
-        totalUsers,
-        totalQueries,
-        completedAnalyses,
-        failedAnalyses,
-        avgDuration,
-        topQueries
-      ] = await Promise.all([
-        User.countDocuments(),
-        Query.countDocuments(dateFilter),
-        Query.countDocuments({ ...dateFilter, status: 'completed' }),
-        Query.countDocuments({ ...dateFilter, status: 'failed' }),
-        this.getAverageDuration(dateFilter),
-        this.getTopQueries(dateFilter)
-      ]);
+    const analytics = await AnalyticsService.getSystemAnalytics({
+      timeframe,
+      metrics: metrics ? metrics.split(',') : undefined,
+    });
 
-      const analytics = {
-        overview: {
-          totalUsers,
-          totalQueries,
-          completedAnalyses,
-          failedAnalyses,
-          successRate: totalQueries > 0 ? (completedAnalyses / totalQueries * 100).toFixed(2) : 0,
-          avgDuration: avgDuration || 0
-        },
-        trends: {
-          topQueries
-        }
-      };
+    logger.info('System analytics retrieved', {
+      adminUserId: req.user.userId,
+      timeframe,
+      metricsCount: Object.keys(analytics).length,
+    });
 
-      res.json(new ApiResponse(true, 'System analytics retrieved', analytics));
+    res.json({
+      success: true,
+      message: 'System analytics retrieved successfully',
+      data: analytics,
+      timeframe,
+    });
+  });
 
-    } catch (error) {
-      logger.error('Failed to get system analytics:', error);
-      next(error);
-    }
-  }
+  /**
+   * Get user-specific analytics
+   */
+  static getUserAnalytics = catchAsync(async (req, res) => {
+    const userId = req.user.userId;
+    const { timeframe = '30d', breakdown } = req.query;
 
-  async getUserAnalytics(req, res, next) {
-    try {
-      const userId = req.user.userId;
-      const { startDate, endDate } = req.query;
-      const dateFilter = { userId, ...this.buildDateFilter(startDate, endDate) };
+    const analytics = await AnalyticsService.getUserAnalytics(userId, {
+      timeframe,
+      breakdown: breakdown ? breakdown.split(',') : undefined,
+    });
 
-      const [
-        totalQueries,
-        completedAnalyses,
-        failedAnalyses,
-        avgDuration,
-        recentActivity
-      ] = await Promise.all([
-        Query.countDocuments(dateFilter),
-        Query.countDocuments({ ...dateFilter, status: 'completed' }),
-        Query.countDocuments({ ...dateFilter, status: 'failed' }),
-        this.getAverageDuration(dateFilter),
-        this.getRecentActivity(userId, 7) // Last 7 days
-      ]);
+    res.json({
+      success: true,
+      message: 'User analytics retrieved successfully',
+      data: analytics,
+      timeframe,
+    });
+  });
 
-      const analytics = {
-        overview: {
-          totalQueries,
-          completedAnalyses,
-          failedAnalyses,
-          successRate: totalQueries > 0 ? (completedAnalyses / totalQueries * 100).toFixed(2) : 0,
-          avgDuration: avgDuration || 0
-        },
-        activity: recentActivity
-      };
+  /**
+   * Get query trends and patterns
+   */
+  static getQueryTrends = catchAsync(async (req, res) => {
+    const { timeframe = '30d', userId, granularity = 'daily' } = req.query;
 
-      res.json(new ApiResponse(true, 'User analytics retrieved', analytics));
+    // If userId is provided and user is not admin, only allow their own data
+    const targetUserId = req.user.role === 'admin' ? userId : req.user.userId;
 
-    } catch (error) {
-      logger.error('Failed to get user analytics:', error);
-      next(error);
-    }
-  }
+    const trends = await AnalyticsService.getQueryTrends({
+      userId: targetUserId,
+      timeframe,
+      granularity,
+    });
 
-  async getQueryTrends(req, res, next) {
-    try {
-      const { period = '30d' } = req.query;
-      const days = parseInt(period.replace('d', ''));
-      
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - days);
+    res.json({
+      success: true,
+      message: 'Query trends retrieved successfully',
+      data: trends,
+      timeframe,
+      granularity,
+    });
+  });
 
-      const trends = await Query.aggregate([
-        { $match: { createdAt: { $gte: startDate } } },
-        {
-          $group: {
-            _id: {
-              $dateToString: { format: '%Y-%m-%d', date: '$createdAt' }
-            },
-            count: { $sum: 1 },
-            completed: {
-              $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] }
-            },
-            failed: {
-              $sum: { $cond: [{ $eq: ['$status', 'failed'] }, 1, 0] }
-            }
-          }
-        },
-        { $sort: { _id: 1 } }
-      ]);
+  /**
+   * Get performance metrics (admin only)
+   */
+  static getPerformanceMetrics = catchAsync(async (req, res) => {
+    const { timeframe = '24h', services } = req.query;
 
-      res.json(new ApiResponse(true, 'Query trends retrieved', trends));
+    const metrics = await AnalyticsService.getPerformanceMetrics({
+      timeframe,
+      services: services ? services.split(',') : undefined,
+    });
 
-    } catch (error) {
-      logger.error('Failed to get query trends:', error);
-      next(error);
-    }
-  }
+    logger.info('Performance metrics retrieved', {
+      adminUserId: req.user.userId,
+      timeframe,
+      servicesCount: Object.keys(metrics).length,
+    });
 
-  async getPerformanceMetrics(req, res, next) {
-    try {
-      const performanceMetrics = await Result.aggregate([
-        {
-          $group: {
-            _id: null,
-            avgTotalDuration: { $avg: '$performance.totalDuration' },
-            avgSearchDuration: { $avg: '$performance.searchDuration' },
-            avgAnalysisDuration: { $avg: '$performance.analysisDuration' },
-            avgSourcesProcessed: { $avg: '$performance.sourcesProcessed' },
-            totalApiCalls: { $sum: '$performance.apiCallsCount' }
-          }
-        }
-      ]);
+    res.json({
+      success: true,
+      message: 'Performance metrics retrieved successfully',
+      data: metrics,
+      timeframe,
+    });
+  });
 
-      res.json(new ApiResponse(true, 'Performance metrics retrieved', 
-        performanceMetrics[0] || {}));
+  /**
+   * Get usage statistics for billing/monitoring
+   */
+  static getUsageStats = catchAsync(async (req, res) => {
+    const { timeframe = '30d', breakdown = 'daily' } = req.query;
+    const userId = req.user.role === 'admin' ? req.query.userId : req.user.userId;
 
-    } catch (error) {
-      logger.error('Failed to get performance metrics:', error);
-      next(error);
-    }
-  }
+    const usage = await AnalyticsService.getUsageStats({
+      userId,
+      timeframe,
+      breakdown,
+    });
 
-  buildDateFilter(startDate, endDate) {
-    const filter = {};
-    if (startDate || endDate) {
-      filter.createdAt = {};
-      if (startDate) filter.createdAt.$gte = new Date(startDate);
-      if (endDate) filter.createdAt.$lte = new Date(endDate);
-    }
-    return filter;
-  }
+    res.json({
+      success: true,
+      message: 'Usage statistics retrieved successfully',
+      data: usage,
+      timeframe,
+      breakdown,
+    });
+  });
 
-  async getAverageDuration(filter) {
-    const result = await Query.aggregate([
-      { $match: filter },
-      { $match: { 'metadata.actualDuration': { $exists: true } } },
-      {
-        $group: {
-          _id: null,
-          avgDuration: { $avg: '$metadata.actualDuration' }
-        }
-      }
-    ]);
+  /**
+   * Get real-time dashboard metrics
+   */
+  static getDashboardMetrics = catchAsync(async (req, res) => {
+    const userId = req.user.userId;
+    const isAdmin = req.user.role === 'admin';
 
-    return result[0]?.avgDuration || 0;
-  }
+    const metrics = await AnalyticsService.getDashboardMetrics({
+      userId: isAdmin ? undefined : userId,
+      includeSystemMetrics: isAdmin,
+    });
 
-  async getTopQueries(filter, limit = 10) {
-    return Query.aggregate([
-      { $match: filter },
-      {
-        $group: {
-          _id: '$queryText',
-          count: { $sum: 1 },
-          successCount: {
-            $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] }
-          }
-        }
-      },
-      { $sort: { count: -1 } },
-      { $limit: limit }
-    ]);
-  }
-
-  async getRecentActivity(userId, days) {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-
-    return Query.aggregate([
-      { $match: { userId, createdAt: { $gte: startDate } } },
-      {
-        $group: {
-          _id: {
-            $dateToString: { format: '%Y-%m-%d', date: '$createdAt' }
-          },
-          count: { $sum: 1 }
-        }
-      },
-      { $sort: { _id: 1 } }
-    ]);
-  }
+    res.json({
+      success: true,
+      message: 'Dashboard metrics retrieved successfully',
+      data: metrics,
+    });
+  });
 }
 
-module.exports = new AnalyticsController();
+module.exports = AnalyticsController;

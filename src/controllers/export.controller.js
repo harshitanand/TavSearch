@@ -1,241 +1,182 @@
+const ExportService = require('../services/export.service');
 const Query = require('../models/Query');
 const Result = require('../models/Result');
-const exportService = require('../services/export.service');
-const { logger } = require('../utils/logger');
-const { ApiResponse } = require('../utils/response');
-const { AnalysisError, ValidationError } = require('../utils/errors');
+const { catchAsync } = require('../middleware/error.middleware');
+const { AuthorizationError, NotFoundError, ValidationError } = require('../utils/errors');
+const logger = require('../utils/logger');
 
 class ExportController {
-  async exportResults(req, res, next) {
-    try {
-      const { queryId, format } = req.params;
-      const userId = req.user.userId;
+  /**
+   * Export analysis results in specified format
+   */
+  static exportResults = catchAsync(async (req, res) => {
+    const { queryId, format } = req.params;
+    const userId = req.user.userId;
 
-      logger.info(`Export request: ${format} for query ${queryId} by user ${userId}`);
+    logger.info('Export request initiated', {
+      userId,
+      queryId,
+      format,
+    });
 
-      // Verify ownership and query status
-      const query = await Query.findOne({ _id: queryId, userId });
-      if (!query) {
-        throw new AnalysisError('Analysis not found or access denied', 404);
-      }
-
-      if (query.status !== 'completed') {
-        throw new AnalysisError(
-          `Analysis is ${query.status}. Export only available for completed analyses.`,
-          400
-        );
-      }
-
-      // Get results with populated query data
-      const result = await Result.findOne({ queryId }).populate('query');
-      if (!result) {
-        throw new AnalysisError('Analysis results not found', 404);
-      }
-      // Validate export format
-      const supportedFormats = ['json', 'pdf', 'csv', 'xlsx', 'html'];
-      if (!supportedFormats.includes(format.toLowerCase())) {
-        throw new ValidationError(
-          `Unsupported format: ${format}. Supported: ${supportedFormats.join(', ')}`,
-          400
-        );
-      }
-
-      // Generate export
-      const exportData = await exportService.generateExport(result, format.toLowerCase());
-
-      // Set appropriate headers
-      const contentType = this.getContentType(format);
-      const filename = `analysis-${queryId}-${Date.now()}.${format.toLowerCase()}`;
-
-      res.setHeader('Content-Type', contentType);
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.setHeader('Content-Security-Policy', "default-src 'self'");
-
-      // Update export tracking
-      await this.trackExport(queryId, format, userId);
-
-      // Send response based on format
-      if (format.toLowerCase() === 'json') {
-        res.json(exportData);
-      } else if (format.toLowerCase() === 'html') {
-        res.send(exportData);
-      } else {
-        // Binary formats (PDF, Excel, etc.)
-        res.send(exportData);
-      }
-
-      logger.info(`Export completed: ${format} for query ${queryId}`, {
-        fileSize: Buffer.isBuffer(exportData)
-          ? exportData.length
-          : JSON.stringify(exportData).length,
-      });
-    } catch (error) {
-      logger.error('Export failed', {
-        error: error.message,
-        queryId: req.params.queryId,
-        format: req.params.format,
-        userId: req.user.userId,
-      });
-      next(error);
+    // Verify ownership and query status
+    const query = await Query.findOne({ _id: queryId, userId });
+    if (!query) {
+      throw new NotFoundError('Analysis not found or access denied');
     }
-  }
 
-  async getAvailableFormats(req, res, next) {
-    try {
-      const { queryId } = req.params;
-      const userId = req.user.userId;
-
-      // Verify query exists and belongs to user
-      const query = await Query.findOne({ _id: queryId, userId });
-      if (!query) {
-        throw new AnalysisError('Analysis not found', 404);
-      }
-
-      const formats = {
-        available: [],
-        unavailable: [],
-        query: {
-          id: query._id,
-          status: query.status,
-          text: query.queryText,
-        },
-      };
-
-      if (query.status === 'completed') {
-        formats.available = [
-          { format: 'json', description: 'Raw data in JSON format', size: 'Small' },
-          { format: 'html', description: 'Professional HTML report', size: 'Medium' },
-          { format: 'pdf', description: 'PDF document for sharing', size: 'Medium' },
-          { format: 'csv', description: 'CSV data for spreadsheets', size: 'Small' },
-          { format: 'xlsx', description: 'Excel workbook with charts', size: 'Large' },
-        ];
-      } else {
-        formats.unavailable = [
-          { reason: `Analysis is ${query.status}`, message: 'Export available after completion' },
-        ];
-      }
-
-      res.json(new ApiResponse(true, 'Export formats retrieved', formats));
-    } catch (error) {
-      logger.error('Failed to get export formats', { error: error.message });
-      next(error);
-    }
-  }
-
-  async getExportHistory(req, res, next) {
-    try {
-      const userId = req.user.userId;
-      const { limit = 20, skip = 0, format } = req.query;
-
-      // Build query for user's completed analyses
-      const queryFilter = { userId, status: 'completed' };
-
-      const queries = await Query.find(queryFilter)
-        .sort({ updatedAt: -1 })
-        .limit(parseInt(limit))
-        .skip(parseInt(skip))
-        .select('queryText createdAt updatedAt status');
-
-      // Get results with export metadata
-      const queryIds = queries.map((q) => q._id);
-      const results = await Result.find({ queryId: { $in: queryIds } })
-        .select('queryId exportOptions createdAt')
-        .populate('query', 'queryText createdAt status');
-
-      const exportHistory = results.map((result) => ({
-        queryId: result.queryId,
-        queryText: result.query?.queryText,
-        analysisDate: result.query?.createdAt,
-        lastExported: result.exportOptions?.lastExported,
-        availableFormats: ['json', 'html', 'pdf', 'csv', 'xlsx'],
-        status: result.query?.status || 'completed',
-      }));
-
-      // Filter by format if specified
-      const filteredHistory = format
-        ? exportHistory.filter((h) => h.availableFormats.includes(format.toLowerCase()))
-        : exportHistory;
-
-      res.json(
-        new ApiResponse(true, 'Export history retrieved', {
-          history: filteredHistory,
-          pagination: {
-            total: await Query.countDocuments(queryFilter),
-            limit: parseInt(limit),
-            skip: parseInt(skip),
-            hasMore:
-              parseInt(skip) + filteredHistory.length < (await Query.countDocuments(queryFilter)),
-          },
-        })
+    if (query.status !== 'completed') {
+      throw new ValidationError(
+        `Analysis is ${query.status}. Export only available for completed analyses.`
       );
-    } catch (error) {
-      logger.error('Failed to get export history', { error: error.message });
-      next(error);
     }
-  }
 
-  async downloadExport(req, res, next) {
-    try {
-      const { exportId } = req.params;
-      const userId = req.user.userId;
-
-      // For this implementation, exportId format: queryId-format-timestamp
-      const [queryId, format, timestamp] = exportId.split('-');
-
-      if (!queryId || !format) {
-        throw new ValidationError('Invalid export ID format', 400);
-      }
-
-      // Redirect to regular export endpoint
-      req.params.queryId = queryId;
-      req.params.format = format;
-
-      return this.exportResults(req, res, next);
-    } catch (error) {
-      logger.error('Download export failed', { error: error.message });
-      next(error);
+    // Get results with populated query data
+    const result = await Result.findOne({ queryId }).populate('query');
+    if (!result) {
+      throw new NotFoundError('Analysis results not found');
     }
-  }
 
-  async getExportStatus(req, res, next) {
-    try {
-      const { exportId } = req.params;
-      const userId = req.user.userId;
-
-      // Parse export ID
-      const [queryId, format, timestamp] = exportId.split('-');
-
-      if (!queryId) {
-        throw new ValidationError('Invalid export ID', 400);
-      }
-
-      // Check query status
-      const query = await Query.findOne({ _id: queryId, userId });
-      if (!query) {
-        throw new AnalysisError('Export not found', 404);
-      }
-
-      const status = {
-        exportId,
-        queryId,
-        format,
-        status: query.status === 'completed' ? 'ready' : 'pending',
-        message:
-          query.status === 'completed'
-            ? 'Export ready for download'
-            : 'Waiting for analysis completion',
-        createdAt: timestamp ? new Date(parseInt(timestamp)) : query.createdAt,
-        downloadUrl: query.status === 'completed' ? `/api/export/${queryId}/${format}` : null,
-      };
-
-      res.json(new ApiResponse(true, 'Export status retrieved', status));
-    } catch (error) {
-      logger.error('Failed to get export status', { error: error.message });
-      next(error);
+    // Validate export format
+    const supportedFormats = ['json', 'pdf', 'csv', 'xlsx', 'html'];
+    if (!supportedFormats.includes(format.toLowerCase())) {
+      throw new ValidationError(
+        `Unsupported format: ${format}. Supported: ${supportedFormats.join(', ')}`
+      );
     }
-  }
 
-  getContentType(format) {
+    // Generate export
+    const exportData = await ExportService.generateExport(result, format.toLowerCase());
+
+    // Set appropriate headers
+    const contentType = ExportController.getContentType(format);
+    const filename = `analysis-${queryId}-${Date.now()}.${format.toLowerCase()}`;
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Security-Policy', "default-src 'self'");
+
+    // Update export tracking
+    await ExportController.trackExport(queryId, format, userId);
+
+    // Send response based on format
+    if (format.toLowerCase() === 'json') {
+      res.json(exportData);
+    } else if (format.toLowerCase() === 'html') {
+      res.send(exportData);
+    } else {
+      // Binary formats (PDF, Excel, etc.)
+      res.send(exportData);
+    }
+
+    logger.info('Export completed successfully', {
+      userId,
+      queryId,
+      format,
+      fileSize: Buffer.isBuffer(exportData) ? exportData.length : JSON.stringify(exportData).length,
+    });
+  });
+
+  /**
+   * Get available export formats for a query
+   */
+  static getAvailableFormats = catchAsync(async (req, res) => {
+    const { queryId } = req.params;
+    const userId = req.user.userId;
+
+    // Verify query exists and belongs to user
+    const query = await Query.findOne({ _id: queryId, userId });
+    if (!query) {
+      throw new NotFoundError('Analysis not found');
+    }
+
+    const formats = {
+      available: [],
+      unavailable: [],
+      query: {
+        id: query._id,
+        status: query.status,
+        text: query.queryText,
+      },
+    };
+
+    if (query.status === 'completed') {
+      formats.available = [
+        { format: 'json', description: 'Raw data in JSON format', size: 'Small' },
+        { format: 'html', description: 'Professional HTML report', size: 'Medium' },
+        { format: 'pdf', description: 'PDF document for sharing', size: 'Medium' },
+        { format: 'csv', description: 'CSV data for spreadsheets', size: 'Small' },
+        { format: 'xlsx', description: 'Excel workbook with charts', size: 'Large' },
+      ];
+    } else {
+      formats.unavailable = [
+        { reason: `Analysis is ${query.status}`, message: 'Export available after completion' },
+      ];
+    }
+
+    res.json({
+      success: true,
+      message: 'Export formats retrieved',
+      data: formats,
+    });
+  });
+
+  /**
+   * Get export history for user
+   */
+  static getExportHistory = catchAsync(async (req, res) => {
+    const userId = req.user.userId;
+    const queryOptions = {
+      ...req.query,
+      userId,
+      status: 'completed', // Only completed analyses can be exported
+    };
+
+    const result = await ExportService.getExportHistory(queryOptions);
+
+    res.json({
+      success: true,
+      message: 'Export history retrieved successfully',
+      data: result.exports,
+      pagination: result.pagination,
+    });
+  });
+
+  /**
+   * Download exported file by export ID
+   */
+  static downloadExport = catchAsync(async (req, res) => {
+    const { exportId } = req.params;
+    const userId = req.user.userId;
+
+    const exportRecord = await ExportService.getExportById(exportId, userId);
+
+    if (!exportRecord) {
+      throw new NotFoundError('Export not found or access denied');
+    }
+
+    // Stream or redirect to file download
+    res.redirect(exportRecord.downloadUrl);
+  });
+
+  /**
+   * Get export status for large exports processed async
+   */
+  static getExportStatus = catchAsync(async (req, res) => {
+    const { exportId } = req.params;
+    const userId = req.user.userId;
+
+    const status = await ExportService.getExportStatus(exportId, userId);
+
+    res.json({
+      success: true,
+      message: 'Export status retrieved',
+      data: status,
+    });
+  });
+
+  // Helper methods
+  static getContentType(format) {
     const contentTypes = {
       json: 'application/json',
       pdf: 'application/pdf',
@@ -246,15 +187,16 @@ class ExportController {
     return contentTypes[format.toLowerCase()] || 'application/octet-stream';
   }
 
-  async trackExport(queryId, format, userId) {
+  static async trackExport(queryId, format, userId) {
     try {
-      // Update result with export metadata
       await Result.findOneAndUpdate(
         { queryId },
         {
           $set: {
             'exportOptions.lastExported': new Date(),
-            'exportOptions.totalExports': { $inc: 1 },
+          },
+          $inc: {
+            'exportOptions.totalExports': 1,
           },
           $addToSet: {
             'exportOptions.formats': format.toLowerCase(),
@@ -271,4 +213,4 @@ class ExportController {
   }
 }
 
-module.exports = new ExportController();
+module.exports = ExportController;

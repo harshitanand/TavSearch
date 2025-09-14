@@ -12,17 +12,40 @@ router.use('/users', userRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/export', exportRoutes);
 
-// API info endpoint
+// Enhanced API info endpoint
 router.get('/', (req, res) => {
   res.json({
-    name: 'Market Intelligence API',
-    version: '1.0.0',
-    description: 'Multi-Agent Market Intelligence System',
-    endpoints: {
-      analysis: '/api/analysis',
-      users: '/api/users',
-      analytics: '/api/analytics',
-      export: '/api/export',
+    success: true,
+    message: 'TavSearch Multi-Agent API',
+    data: {
+      name: 'TavSearch Multi-Agent API',
+      version: '2.0.0',
+      description: 'LangChain Multi-Agent Market Intelligence System',
+      framework: 'LangChain + Node.js + Express',
+      features: [
+        'Multi-agent workflow orchestration',
+        'Real-time web search via Tavily API',
+        'AI-powered analysis with OpenAI GPT-4',
+        'Professional report generation',
+        'Multiple export formats',
+        'Advanced analytics and monitoring',
+        'User management and authentication',
+      ],
+      endpoints: {
+        analysis: '/api/analysis',
+        users: '/api/users',
+        analytics: '/api/analytics',
+        export: '/api/export',
+      },
+      agents: [
+        'PlannerAgent - Search strategy creation',
+        'SearchAgent - Real-time data gathering',
+        'AnalysisAgent - AI-powered processing',
+        'SynthesisAgent - Report generation',
+        'ValidatorAgent - Quality control',
+      ],
+      status: 'operational',
+      timestamp: new Date().toISOString(),
     },
   });
 });

@@ -1,33 +1,33 @@
 const express = require('express');
-const analysisController = require('../controllers/analysis.controller');
+const AnalysisController = require('../controllers/analysis.controller');
 const { authenticate } = require('../middleware/auth');
-const { validateAnalysisRequest } = require('../middleware/validation');
+const { validateAnalysisRequest, validateQueryParams } = require('../middleware/validation');
 const { rateLimitAnalysis } = require('../middleware/rateLimit');
 
 const router = express.Router();
 
-// Start new analysis
+// Analysis management routes
 router.post(
   '/',
   authenticate,
   validateAnalysisRequest,
   rateLimitAnalysis,
-  analysisController.startAnalysis
+  AnalysisController.startAnalysis
 );
+router.get('/recent', authenticate, validateQueryParams, AnalysisController.getRecentAnalyses);
+router.get('/stats', authenticate, validateQueryParams, AnalysisController.getAnalysisStats);
 
-// Get analysis status
-router.get('/:queryId/status', authenticate, analysisController.getAnalysisStatus);
+// System and workflow routes
+router.get('/workflow/diagram', authenticate, AnalysisController.getWorkflowDiagram);
+router.get('/system/status', authenticate, AnalysisController.getSystemStatus);
 
-// Get analysis results
-router.get('/:queryId/results', authenticate, analysisController.getAnalysisResults);
+// Individual analysis routes
+router.get('/:queryId/status', authenticate, AnalysisController.getAnalysisStatus);
+router.get('/:queryId/results', authenticate, AnalysisController.getAnalysisResults);
+router.delete('/:queryId', authenticate, AnalysisController.cancelAnalysis);
+router.post('/:queryId/retry', authenticate, AnalysisController.retryAnalysis);
 
-// Cancel analysis
-router.delete('/:queryId', authenticate, analysisController.cancelAnalysis);
-
-// Retry failed analysis
-router.post('/:queryId/retry', authenticate, analysisController.retryAnalysis);
-
-// Get user's analysis history
-router.get('/', authenticate, analysisController.getUserAnalyses);
+// User analysis history (placed last to avoid route conflicts)
+router.get('/', authenticate, validateQueryParams, AnalysisController.getUserAnalyses);
 
 module.exports = router;
