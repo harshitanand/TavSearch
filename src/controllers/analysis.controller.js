@@ -141,18 +141,24 @@ class AnalysisController {
    */
   static getUserAnalyses = catchAsync(async (req, res) => {
     const userId = req.user.userId;
+
+    // ✅ FIX: Extract query parameters properly
     const queryOptions = {
-      ...req.query,
-      userId,
+      limit: parseInt(req.query.limit) || 10,
+      skip: parseInt(req.query.skip) || 0,
+      status: req.query.status,
+      sortBy: req.query.sortBy || 'createdAt',
+      sortOrder: req.query.sortOrder || 'desc',
       populate: req.query.populate ? req.query.populate.split(',') : [],
     };
 
-    const result = await AnalysisService.getUserAnalyses(queryOptions);
+    // ✅ FIX: Pass userId and options separately
+    const result = await AnalysisService.getUserAnalyses(userId, queryOptions);
 
     logger.info('User analyses retrieved', {
       userId,
       page: req.query.page || 1,
-      limit: req.query.limit || 10,
+      limit: queryOptions.limit,
       total: result.pagination?.total || result.analyses?.length,
     });
 

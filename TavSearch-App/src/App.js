@@ -1,834 +1,513 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
-  Search,
-  History,
   FileText,
-  Download,
-  Settings,
   Zap,
-  Globe,
-  Brain,
-  Database,
-  ChevronDown,
-  ChevronRight,
-  ExternalLink,
-  Clock,
-  CheckCircle,
-  AlertCircle,
-  Loader,
+  Home,
+  BarChart3,
+  User,
+  Download,
+  Menu,
+  X,
+  Settings,
+  Activity,
+  Sparkles,
+  Shield,
 } from 'lucide-react';
 
-const TavSearchApp = () => {
-  const [activeTab, setActiveTab] = useState('search');
-  const [query, setQuery] = useState('');
-  const [queryType, setQueryType] = useState('research');
-  const [searchDepth, setSearchDepth] = useState('standard');
-  const [maxResults, setMaxResults] = useState(10);
-  const [includeImages, setIncludeImages] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState(null);
-  const [expandedAgents, setExpandedAgents] = useState(new Set());
-  const [history, setHistory] = useState([]);
-  const [error, setError] = useState(null);
-  const [apiUrl, setApiUrl] = useState(process.env.REACT_APP_API_URL || 'http://localhost:5000');
+// Import ALL components
+import Dashboard from './components/Dashboard';
+import AnalysisProgress from './components/AnalysisProgress';
+import AnalysisResults from './components/AnalysisResults';
+import RecentAnalyses from './components/RecentAnalyses';
+import SystemStatus from './components/SystemStatus';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
+import UserProfile from './components/UserProfile';
+import ExportManager from './components/ExportManager';
+import Toast from './components/Toast';
 
-  // Mock results as fallback
-  const mockResults = {
-    summary:
-      'Based on the latest research, renewable energy technology has seen remarkable advances in 2024, particularly in solar efficiency, wind turbine design, and energy storage solutions. Key developments include perovskite-silicon tandem solar cells achieving 33% efficiency, offshore wind farms scaling to 15MW+ turbines, and solid-state batteries showing promising commercial viability.',
-    key_insights: [
-      'Solar panel efficiency has increased by 15% with new perovskite technology',
-      'Wind energy costs have dropped 23% due to larger, more efficient turbines',
-      'Battery storage capacity has improved 40% with solid-state innovations',
-      'Green hydrogen production costs are approaching grid parity',
-    ],
-    agents: {
-      'Web Search Agent': {
-        status: 'completed',
-        summary:
-          'Gathered 47 relevant sources from academic papers, news articles, and industry reports',
-        sources: [
-          {
-            title: 'Nature Energy: Perovskite Solar Breakthrough',
-            url: 'https://nature.com/articles/energy-2024',
-            score: 0.95,
-          },
-          {
-            title: 'Wind Power Monthly: Offshore Developments',
-            url: 'https://windpower.com/offshore-2024',
-            score: 0.92,
-          },
-          {
-            title: 'MIT Technology Review: Battery Innovations',
-            url: 'https://technologyreview.com/batteries',
-            score: 0.89,
-          },
-        ],
-        execution_time: 4.2,
-      },
-      'Analysis Agent': {
-        status: 'completed',
-        summary:
-          'Performed comparative analysis of efficiency gains and cost reductions across renewable sectors',
-        data: 'Cost reduction trends: Solar (-12%), Wind (-23%), Storage (-18%)',
-        execution_time: 3.1,
-      },
-      'Synthesis Agent': {
-        status: 'completed',
-        summary: 'Integrated findings into coherent analysis with key recommendations',
-        execution_time: 2.3,
-      },
-    },
-    execution_time: 12.5,
-  };
+// Import API service
+import { api } from './services/api';
 
-  // Mock history as fallback
-  const mockHistory = [
-    {
-      id: 1,
-      query: 'Latest developments in renewable energy technology',
-      timestamp: '2024-01-15T10:30:00Z',
-      status: 'completed',
-      execution_time: 12.5,
-    },
-    {
-      id: 2,
-      query: 'Impact of AI on healthcare industry',
-      timestamp: '2024-01-14T15:45:00Z',
-      status: 'completed',
-      execution_time: 8.3,
-    },
+const App = () => {
+  // Main state management
+  const [currentView, setCurrentView] = useState('dashboard');
+  const [currentAnalysis, setCurrentAnalysis] = useState(null);
+  const [toasts, setToasts] = useState([]);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [showExportManager, setShowExportManager] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Navigation configuration
+  const navigation = [
+    { id: 'dashboard', name: 'Dashboard', icon: Home, description: 'Start new analysis' },
+    { id: 'analytics', name: 'Analytics', icon: BarChart3, description: 'View insights & trends' },
+    { id: 'profile', name: 'Profile', icon: User, description: 'Manage account' },
+    { id: 'exports', name: 'Exports', icon: Download, description: 'Download reports' },
   ];
 
-  const queryTypes = [
-    { value: 'research', label: 'Research & Analysis', icon: '🔬' },
-    { value: 'news', label: 'Current News', icon: '📰' },
-    { value: 'academic', label: 'Academic/Scientific', icon: '🎓' },
-    { value: 'market', label: 'Market Intelligence', icon: '📊' },
-    { value: 'technical', label: 'Technical Documentation', icon: '⚙️' },
-    { value: 'comparison', label: 'Product/Service Comparison', icon: '⚖️' },
-    { value: 'trend', label: 'Trend Analysis', icon: '📈' },
-  ];
-
-  // Load history from API on component mount
-  useEffect(() => {
-    fetchHistory();
-  }, []);
-
-  const fetchHistory = async () => {
-    try {
-      const response = await fetch(`${apiUrl}/api/export/history`);
-      if (response.ok) {
-        const data = await response.json();
-        setHistory(data.history || []);
-      } else {
-        console.warn('Failed to fetch history, using mock data');
-        setHistory(mockHistory);
-      }
-    } catch (error) {
-      console.warn('Error fetching history, using mock data:', error);
-      setHistory(mockHistory);
-    }
+  // Toast notification system
+  const addToast = (message, type = 'info') => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message, type }]);
   };
 
-  const handleSearch = async () => {
-    if (!query.trim()) return;
+  const removeToast = (id) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+  };
 
-    setLoading(true);
-    setResults(null);
-    setError(null);
-
-    const queryData = {
-      query: query.trim(),
-      query_type: queryType,
-      search_depth: searchDepth,
-      max_results: maxResults,
-      include_images: includeImages,
-    };
-
+  // Analysis workflow handlers
+  const handleStartAnalysis = async (query) => {
     try {
-      const response = await fetch(`${apiUrl}/api/analysis`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(queryData),
+      addToast('Starting multi-agent analysis...', 'info');
+
+      const response = await api.startAnalysis({
+        query: query.trim(),
+        userId: 'demo-user',
+        priority: 'normal',
+        tags: ['market-research'],
+        framework: 'langchain-multiagent',
       });
 
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status} - ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      setResults(data);
-
-      // Refresh history after successful analysis
-      await fetchHistory();
-    } catch (err) {
-      console.error('API call failed, using mock results:', err);
-
-      // Set user-friendly error message
-      if (err.message.includes('Failed to fetch')) {
-        setError('Unable to connect to TavSearch API. Using mock data for demonstration.');
-      } else if (err.message.includes('500')) {
-        setError('Server error occurred. Using mock data for demonstration.');
-      } else if (err.message.includes('400')) {
-        setError('Invalid request. Using mock data for demonstration.');
-      } else {
-        setError('API unavailable. Using mock data for demonstration.');
-      }
-
-      // Use mock results as fallback
-      setTimeout(() => {
-        setResults(mockResults);
-
-        // Add to mock history
-        const newHistoryItem = {
-          id: Date.now(),
-          query: query,
-          timestamp: new Date().toISOString(),
-          status: 'completed',
-          execution_time: mockResults.execution_time,
-        };
-        setHistory((prev) => [newHistoryItem, ...prev]);
-
-        setLoading(false);
-      }, 2000); // Simulate processing time
-      return;
-    }
-
-    setLoading(false);
-  };
-
-  const handleHistorySelect = async (historyItem) => {
-    try {
-      // Try to fetch full results for this history item from API
-      const response = await fetch(`${apiUrl}/api/export/history/${historyItem.id}`);
-      if (response.ok) {
-        const data = await response.json();
-        setResults(data.results || data);
-        setActiveTab('search');
-        return;
-      }
-    } catch (error) {
-      console.warn('API call failed for history item, using mock data:', error);
-    }
-
-    // Fallback to mock results
-    setResults(mockResults);
-    setActiveTab('search');
-    setError('API unavailable. Showing mock results for demonstration.');
-  };
-
-  const deleteHistoryItem = async (id) => {
-    try {
-      const response = await fetch(`${apiUrl}/api/history/${id}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        setHistory(history.filter((item) => item.id !== id));
-        return;
-      }
-    } catch (error) {
-      console.warn('API call failed for delete, removing from local state:', error);
-    }
-
-    // Fallback: remove from local state only
-    setHistory(history.filter((item) => item.id !== id));
-    setError('API unavailable. Item removed from local view only.');
-  };
-
-  const exportResults = async (format) => {
-    if (!results) return;
-
-    try {
-      const response = await fetch(`${apiUrl}/api/export/${format}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ results }),
-      });
-
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `tavsearch-results-${new Date().toISOString().slice(0, 10)}.${format}`;
-        link.click();
-        URL.revokeObjectURL(url);
-      } else {
-        throw new Error('Export failed');
-      }
-    } catch (error) {
-      console.error('Error exporting results:', error);
-      // Fallback to client-side export
-      exportClientSide(format);
-    }
-  };
-
-  const exportClientSide = (format) => {
-    if (!results) return;
-
-    let content, mimeType, fileName;
-    const timestamp = new Date().toISOString().slice(0, 10);
-
-    switch (format) {
-      case 'json':
-        content = JSON.stringify(results, null, 2);
-        mimeType = 'application/json';
-        fileName = `tavsearch-results-${timestamp}.json`;
-        break;
-      case 'csv':
-        content = convertToCSV(results);
-        mimeType = 'text/csv';
-        fileName = `tavsearch-results-${timestamp}.csv`;
-        break;
-      case 'md':
-        content = convertToMarkdown(results);
-        mimeType = 'text/markdown';
-        fileName = `tavsearch-results-${timestamp}.md`;
-        break;
-      default:
-        return;
-    }
-
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const convertToCSV = (data) => {
-    let csv = 'Agent,Status,Summary,Sources Count,Execution Time\n';
-    if (data.agents) {
-      Object.entries(data.agents).forEach(([agentName, agentData]) => {
-        const summary = (agentData.summary || '').replace(/"/g, '""');
-        const sourcesCount = agentData.sources ? agentData.sources.length : 0;
-        const executionTime = agentData.execution_time || '';
-        const status = agentData.status || '';
-        csv += `"${agentName}","${status}","${summary}",${sourcesCount},${executionTime}\n`;
-      });
-    }
-    return csv;
-  };
-
-  const convertToMarkdown = (data) => {
-    let md = '# TavSearch Analysis Results\n\n';
-    md += `Generated on: ${new Date().toLocaleDateString()}\n\n`;
-
-    if (data.summary) {
-      md += `## Executive Summary\n\n${data.summary}\n\n`;
-    }
-
-    if (data.key_insights) {
-      md += '## Key Insights\n\n';
-      if (Array.isArray(data.key_insights)) {
-        data.key_insights.forEach((insight, index) => {
-          md += `${index + 1}. ${insight}\n`;
+      if (response.success) {
+        setCurrentAnalysis({
+          queryId: response.data.queryId,
+          query: query.trim(),
+          status: 'processing',
+          startTime: new Date(),
+          framework: 'LangChain Multi-Agent',
         });
+        setCurrentView('analyzing');
+        addToast('Analysis started! 5 AI agents are now working on your query.', 'success');
+        setRefreshTrigger((prev) => prev + 1);
       } else {
-        md += `${data.key_insights}\n`;
+        addToast('Failed to start analysis. Please try again.', 'error');
       }
-      md += '\n';
+    } catch (error) {
+      console.error('Analysis start failed:', error);
+      addToast(`Failed to start analysis: ${error.message}`, 'error');
     }
-
-    if (data.agents) {
-      md += '## Agent Details\n\n';
-      Object.entries(data.agents).forEach(([agentName, agentData]) => {
-        md += `### ${agentName}\n\n`;
-        if (agentData.status) md += `**Status:** ${agentData.status}\n\n`;
-        if (agentData.summary) md += `**Summary:** ${agentData.summary}\n\n`;
-        if (agentData.sources && agentData.sources.length > 0) {
-          md += '**Sources:**\n';
-          agentData.sources.forEach((source, index) => {
-            md += `${index + 1}. [${source.title || 'Source'}](${source.url})\n`;
-          });
-          md += '\n';
-        }
-        if (agentData.execution_time) md += `**Execution Time:** ${agentData.execution_time}s\n\n`;
-      });
-    }
-
-    return md;
   };
 
-  const toggleAgent = (agentName) => {
-    const newExpanded = new Set(expandedAgents);
-    if (newExpanded.has(agentName)) {
-      newExpanded.delete(agentName);
+  const handleAnalysisComplete = (queryId) => {
+    addToast('Analysis completed successfully! Generating results...', 'success');
+    setTimeout(() => {
+      setCurrentView('results');
+      setRefreshTrigger((prev) => prev + 1);
+    }, 1500);
+  };
+
+  const handleAnalysisError = (error) => {
+    addToast(`Analysis failed: ${error}`, 'error');
+    setTimeout(() => {
+      setCurrentView('dashboard');
+      setCurrentAnalysis(null);
+    }, 3000);
+  };
+
+  const handleStartNew = () => {
+    setCurrentView('dashboard');
+    setCurrentAnalysis(null);
+  };
+
+  const handleSelectAnalysis = (analysis) => {
+    setCurrentAnalysis({
+      queryId: analysis._id,
+      query: analysis.queryText,
+      status: analysis.status,
+      framework: analysis.framework || 'LangChain Multi-Agent',
+    });
+
+    if (analysis.status === 'completed') {
+      setCurrentView('results');
+    } else if (analysis.status === 'processing') {
+      setCurrentView('analyzing');
     } else {
-      newExpanded.add(agentName);
+      addToast(`Analysis status: ${analysis.status}`, 'info');
     }
-    setExpandedAgents(newExpanded);
   };
 
-  const StatusIcon = ({ status }) => {
-    switch (status) {
-      case 'completed':
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case 'failed':
-        return <AlertCircle className="w-4 h-4 text-red-500" />;
+  // Navigation handler
+  const handleNavigation = (viewId) => {
+    setCurrentView(viewId);
+    setSidebarOpen(false);
+
+    // Reset analysis context when navigating away from analysis views
+    if (!['dashboard', 'analyzing', 'results'].includes(viewId)) {
+      setCurrentAnalysis(null);
+    }
+  };
+
+  // Export handlers
+  const handleOpenExportManager = (queryId = null) => {
+    if (queryId && queryId !== currentAnalysis?.queryId) {
+      setCurrentAnalysis((prev) => ({ ...prev, queryId }));
+    }
+    setShowExportManager(true);
+  };
+
+  // Render different views
+  const renderCurrentView = () => {
+    switch (currentView) {
+      case 'dashboard':
+        return (
+          <div className="space-y-8">
+            {/* Hero Section */}
+            <div className="text-center space-y-4">
+              <h2 className="text-4xl font-bold text-gray-900">AI-Powered Market Intelligence</h2>
+              <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+                Leverage our advanced LangChain multi-agent system with 5 specialized AI agents
+                working together to deliver comprehensive market analysis in minutes.
+              </p>
+            </div>
+
+            <Dashboard
+              onStartAnalysis={handleStartAnalysis}
+              onSelectAnalysis={handleSelectAnalysis}
+              refreshTrigger={refreshTrigger}
+            />
+          </div>
+        );
+
+      case 'analyzing':
+        return currentAnalysis ? (
+          <div className="space-y-8">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-bold text-gray-900">
+                  Multi-Agent Analysis in Progress
+                </h2>
+                <p className="text-gray-600 mt-2">
+                  Our specialized AI agents are collaborating to analyze your query
+                </p>
+                <p className="text-sm text-blue-600 mt-1">Framework: {currentAnalysis.framework}</p>
+              </div>
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={handleStartNew}
+                  className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  Start New Analysis
+                </button>
+              </div>
+            </div>
+
+            <AnalysisProgress
+              queryId={currentAnalysis.queryId}
+              query={currentAnalysis.query}
+              onComplete={handleAnalysisComplete}
+              onError={handleAnalysisError}
+            />
+
+            <SystemStatus />
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <Activity className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-500">No active analysis. Start a new one from the dashboard.</p>
+            <button
+              onClick={() => handleNavigation('dashboard')}
+              className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Go to Dashboard
+            </button>
+          </div>
+        );
+
+      case 'results':
+        return currentAnalysis ? (
+          <div className="space-y-8">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-bold text-gray-900">Analysis Results</h2>
+                <p className="text-gray-600 mt-2">Comprehensive market intelligence report</p>
+                <p className="text-sm text-green-600 mt-1">
+                  Generated by: {currentAnalysis.framework}
+                </p>
+              </div>
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => handleOpenExportManager(currentAnalysis.queryId)}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>Export Results</span>
+                </button>
+                <button
+                  onClick={handleStartNew}
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  New Analysis
+                </button>
+              </div>
+            </div>
+
+            <AnalysisResults queryId={currentAnalysis.queryId} onStartNew={handleStartNew} />
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-500">No results to display. Complete an analysis first.</p>
+            <button
+              onClick={() => handleNavigation('dashboard')}
+              className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Start Analysis
+            </button>
+          </div>
+        );
+
+      case 'analytics':
+        return (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-bold text-gray-900">Analytics Dashboard</h2>
+                <p className="text-gray-600 mt-2">Comprehensive insights and performance metrics</p>
+              </div>
+              <div className="flex items-center space-x-2 text-sm text-green-600">
+                <Activity className="h-4 w-4" />
+                <span>Real-time Data</span>
+              </div>
+            </div>
+            <AnalyticsDashboard />
+          </div>
+        );
+
+      case 'profile':
+        return (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-bold text-gray-900">User Profile</h2>
+                <p className="text-gray-600 mt-2">Manage your account and preferences</p>
+              </div>
+              <div className="flex items-center space-x-2 text-sm text-blue-600">
+                <Settings className="h-4 w-4" />
+                <span>Account Settings</span>
+              </div>
+            </div>
+            <UserProfile />
+          </div>
+        );
+
+      case 'exports':
+        return (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-bold text-gray-900">Export Management</h2>
+                <p className="text-gray-600 mt-2">Download and manage your analysis reports</p>
+              </div>
+              <button
+                onClick={() => handleOpenExportManager()}
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+              >
+                <Download className="h-4 w-4" />
+                <span>Open Export Manager</span>
+              </button>
+            </div>
+
+            {/* Export overview */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white rounded-xl p-6 border border-gray-200">
+                <div className="flex items-center space-x-3">
+                  <Download className="h-8 w-8 text-blue-500" />
+                  <div>
+                    <p className="text-sm text-gray-600">Available Formats</p>
+                    <p className="text-xl font-bold text-gray-900">PDF, JSON, CSV, XLSX</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl p-6 border border-gray-200">
+                <div className="flex items-center space-x-3">
+                  <Activity className="h-8 w-8 text-green-500" />
+                  <div>
+                    <p className="text-sm text-gray-600">Export History</p>
+                    <p className="text-xl font-bold text-gray-900">View Past Downloads</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl p-6 border border-gray-200">
+                <div className="flex items-center space-x-3">
+                  <Settings className="h-8 w-8 text-purple-500" />
+                  <div>
+                    <p className="text-sm text-gray-600">Auto-Export</p>
+                    <p className="text-xl font-bold text-gray-900">Configure Settings</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Recent Analyses for Export */}
+            <div className="bg-white rounded-xl p-6 border border-gray-200">
+              <h3 className="text-xl font-semibold text-gray-900 mb-4">Recent Analyses</h3>
+              <RecentAnalyses
+                onSelectAnalysis={handleSelectAnalysis}
+                refreshTrigger={refreshTrigger}
+              />
+            </div>
+          </div>
+        );
+
       default:
-        return <Loader className="w-4 h-4 text-blue-500 animate-spin" />;
+        return (
+          <Dashboard
+            onStartAnalysis={handleStartAnalysis}
+            onSelectAnalysis={handleSelectAnalysis}
+            refreshTrigger={refreshTrigger}
+          />
+        );
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      {/* Header */}
-      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
-                <Zap className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  TavSearch
-                </h1>
-                <p className="text-sm text-slate-600">Multi-Agent Research System</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                <Settings className="w-5 h-5 text-slate-600" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Tab Navigation */}
-        <div className="flex space-x-1 bg-white/60 backdrop-blur-sm p-1 rounded-xl mb-8 border border-slate-200">
-          <button
-            onClick={() => setActiveTab('search')}
-            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition-all ${
-              activeTab === 'search'
-                ? 'bg-white shadow-sm text-blue-600 border border-blue-100'
-                : 'text-slate-600 hover:text-slate-800 hover:bg-white/50'
-            }`}
-          >
-            <Search className="w-4 h-4" />
-            <span>Search & Analysis</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('history')}
-            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition-all ${
-              activeTab === 'history'
-                ? 'bg-white shadow-sm text-blue-600 border border-blue-100'
-                : 'text-slate-600 hover:text-slate-800 hover:bg-white/50'
-            }`}
-          >
-            <History className="w-4 h-4" />
-            <span>History</span>
-          </button>
-        </div>
-
-        {/* Search Tab */}
-        {activeTab === 'search' && (
-          <div className="space-y-8">
-            {/* Error Display */}
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-2xl p-6 mb-6">
-                <div className="flex items-center space-x-2 mb-2">
-                  <AlertCircle className="w-5 h-5 text-red-500" />
-                  <span className="font-medium text-red-800">Error</span>
-                </div>
-                <p className="text-red-700">{error}</p>
-                <button
-                  onClick={() => setError(null)}
-                  className="mt-3 text-red-600 hover:text-red-700 text-sm font-medium"
-                >
-                  Dismiss
-                </button>
-              </div>
-            )}
-
-            {/* API Connection Status */}
-            <div className="bg-white/60 backdrop-blur-sm rounded-xl border border-slate-200 p-4 mb-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm text-slate-600">API Endpoint: {apiUrl}</span>
-                  <span className="text-xs text-slate-500">(Mock fallback enabled)</span>
-                </div>
-                <button
-                  onClick={fetchHistory}
-                  className="text-xs text-blue-600 hover:text-blue-700 font-medium px-2 py-1 rounded hover:bg-blue-50 transition-colors"
-                >
-                  Test Connection
-                </button>
-              </div>
-            </div>
-
-            {/* Search Form */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200 p-8 shadow-sm">
-              <div className="mb-6">
-                <h2 className="text-xl font-semibold text-slate-800 mb-2">Submit Research Query</h2>
-                <p className="text-slate-600">
-                  Let our intelligent agents analyze the web for comprehensive insights
-                </p>
-              </div>
-
-              <div className="space-y-6">
-                {/* Query Input */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Research Query
-                  </label>
-                  <textarea
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Enter your research question or topic (e.g., 'Latest developments in renewable energy technology')"
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none transition-all"
-                    rows={3}
-                  />
-                </div>
-
-                {/* Options Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {/* Query Type */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Query Type
-                    </label>
-                    <select
-                      value={queryType}
-                      onChange={(e) => setQueryType(e.target.value)}
-                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      {queryTypes.map((type) => (
-                        <option key={type.value} value={type.value}>
-                          {type.icon} {type.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Search Depth */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Search Depth
-                    </label>
-                    <select
-                      value={searchDepth}
-                      onChange={(e) => setSearchDepth(e.target.value)}
-                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="quick">⚡ Quick (Fast results)</option>
-                      <option value="standard">🎯 Standard (Balanced)</option>
-                      <option value="deep">🔍 Deep (Comprehensive)</option>
-                    </select>
-                  </div>
-
-                  {/* Max Results */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Maximum Results
-                    </label>
-                    <select
-                      value={maxResults}
-                      onChange={(e) => setMaxResults(Number(e.target.value))}
-                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value={5}>5 results</option>
-                      <option value={10}>10 results</option>
-                      <option value={15}>15 results</option>
-                      <option value={20}>20 results</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Include Images Checkbox */}
-                <div className="flex items-center space-x-3">
-                  <input
-                    type="checkbox"
-                    id="includeImages"
-                    checked={includeImages}
-                    onChange={(e) => setIncludeImages(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
-                  />
-                  <label htmlFor="includeImages" className="text-sm text-slate-700">
-                    Include images and visual content
-                  </label>
-                </div>
-
-                {/* Search Button */}
-                <button
-                  onClick={handleSearch}
-                  disabled={loading || !query.trim()}
-                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 px-6 rounded-xl font-medium hover:shadow-lg hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-none transition-all duration-200"
-                >
-                  {loading ? (
-                    <div className="flex items-center justify-center space-x-2">
-                      <Loader className="w-5 h-5 animate-spin" />
-                      <span>Analyzing with AI Agents...</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center space-x-2">
-                      <Brain className="w-5 h-5" />
-                      <span>Start Analysis</span>
-                    </div>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Loading State */}
-            {loading && (
-              <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200 p-8">
-                <div className="flex items-center space-x-4 mb-6">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                  <div
-                    className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"
-                    style={{ animationDelay: '0.2s' }}
-                  ></div>
-                  <div
-                    className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"
-                    style={{ animationDelay: '0.4s' }}
-                  ></div>
-                  <span className="text-slate-600 font-medium">Multi-Agent System Processing</span>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center space-x-3">
-                    <Globe className="w-4 h-4 text-blue-500" />
-                    <span className="text-sm text-slate-600">
-                      Web Search Agent gathering sources...
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <Brain className="w-4 h-4 text-purple-500" />
-                    <span className="text-sm text-slate-600">
-                      Analysis Agent processing data...
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <FileText className="w-4 h-4 text-indigo-500" />
-                    <span className="text-sm text-slate-600">
-                      Synthesis Agent compiling results...
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Results */}
-            {results && (
-              <div className="space-y-6">
-                {/* Summary Card */}
-                <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl border border-blue-100 p-8">
-                  <h3 className="text-xl font-semibold text-slate-800 mb-4">Executive Summary</h3>
-                  <p className="text-slate-700 leading-relaxed">{results.summary}</p>
-                  <div className="mt-4 flex items-center space-x-4 text-sm text-slate-600">
-                    <div className="flex items-center space-x-1">
-                      <Clock className="w-4 h-4" />
-                      <span>{results.execution_time}s</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <Database className="w-4 h-4" />
-                      <span>{Object.keys(results.agents).length} agents</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Key Insights */}
-                <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200 p-8">
-                  <h3 className="text-xl font-semibold text-slate-800 mb-4">Key Insights</h3>
-                  <ul className="space-y-3">
-                    {results.key_insights.map((insight, index) => (
-                      <li key={index} className="flex items-start space-x-3">
-                        <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center mt-0.5">
-                          <CheckCircle className="w-3 h-3 text-green-600" />
-                        </div>
-                        <span className="text-slate-700">{insight}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* Agent Details */}
-                <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200 p-8">
-                  <h3 className="text-xl font-semibold text-slate-800 mb-6">Agent Outputs</h3>
-                  <div className="space-y-4">
-                    {Object.entries(results.agents).map(([agentName, agentData]) => {
-                      const isExpanded = expandedAgents.has(agentName);
-                      return (
-                        <div
-                          key={agentName}
-                          className="border border-slate-200 rounded-xl overflow-hidden"
-                        >
-                          <button
-                            onClick={() => toggleAgent(agentName)}
-                            className="w-full p-4 bg-slate-50 hover:bg-slate-100 flex items-center justify-between transition-colors"
-                          >
-                            <div className="flex items-center space-x-3">
-                              {isExpanded ? (
-                                <ChevronDown className="w-4 h-4" />
-                              ) : (
-                                <ChevronRight className="w-4 h-4" />
-                              )}
-                              <span className="font-medium text-slate-800">{agentName}</span>
-                              <StatusIcon status={agentData.status} />
-                            </div>
-                            <span className="text-sm text-slate-500">
-                              {agentData.execution_time}s
-                            </span>
-                          </button>
-
-                          {isExpanded && (
-                            <div className="p-4 border-t border-slate-200">
-                              {agentData.summary && (
-                                <div className="mb-4">
-                                  <h4 className="font-medium text-slate-800 mb-2">Summary</h4>
-                                  <p className="text-slate-600">{agentData.summary}</p>
-                                </div>
-                              )}
-
-                              {agentData.sources && (
-                                <div className="mb-4">
-                                  <h4 className="font-medium text-slate-800 mb-2">
-                                    Sources ({agentData.sources.length})
-                                  </h4>
-                                  <div className="space-y-2">
-                                    {agentData.sources.slice(0, 3).map((source, index) => (
-                                      <a
-                                        key={index}
-                                        href={source.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center space-x-2 text-blue-600 hover:text-blue-700 text-sm"
-                                      >
-                                        <ExternalLink className="w-3 h-3" />
-                                        <span>{source.title}</span>
-                                        <span className="text-slate-400">({source.score})</span>
-                                      </a>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-
-                              {agentData.data && (
-                                <div>
-                                  <h4 className="font-medium text-slate-800 mb-2">Data</h4>
-                                  <div className="bg-slate-100 rounded-lg p-3 text-sm text-slate-600 font-mono">
-                                    {agentData.data}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Export Options */}
-                <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200 p-8">
-                  <h3 className="text-xl font-semibold text-slate-800 mb-4">Export Results</h3>
-                  <div className="flex flex-wrap gap-3">
-                    <button
-                      onClick={() => exportResults('json')}
-                      className="flex items-center space-x-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-                    >
-                      <Download className="w-4 h-4" />
-                      <span>JSON</span>
-                    </button>
-                    <button
-                      onClick={() => exportResults('csv')}
-                      className="flex items-center space-x-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-                    >
-                      <Download className="w-4 h-4" />
-                      <span>CSV</span>
-                    </button>
-                    <button
-                      onClick={() => exportResults('md')}
-                      className="flex items-center space-x-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-                    >
-                      <Download className="w-4 h-4" />
-                      <span>Markdown</span>
-                    </button>
-                    <button
-                      onClick={() => exportResults('pdf')}
-                      className="flex items-center space-x-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-                    >
-                      <Download className="w-4 h-4" />
-                      <span>PDF</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* History Tab */}
-        {activeTab === 'history' && (
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200 p-8">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-slate-800">Analysis History</h2>
-              <span className="text-sm text-slate-500">{history.length} queries</span>
-            </div>
-
-            <div className="space-y-4">
-              {history.length === 0 ? (
-                <div className="text-center py-12">
-                  <History className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-slate-600 mb-2">No Analysis History</h3>
-                  <p className="text-slate-500">
-                    Start by submitting a research query to see your history here.
-                  </p>
-                </div>
-              ) : (
-                history.map((item) => (
-                  <div
-                    key={item.id}
-                    className="border border-slate-200 rounded-xl p-4 hover:shadow-sm transition-shadow"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="font-medium text-slate-800 mb-1">{item.query}</h3>
-                        <div className="flex items-center space-x-4 text-sm text-slate-500">
-                          <span>{new Date(item.timestamp).toLocaleDateString()}</span>
-                          <div className="flex items-center space-x-1">
-                            <StatusIcon status={item.status} />
-                            <span className="capitalize">{item.status}</span>
-                          </div>
-                          {item.execution_time && <span>{item.execution_time}s</span>}
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => handleHistorySelect(item)}
-                          className="text-blue-600 hover:text-blue-700 text-sm font-medium px-3 py-1 rounded-lg hover:bg-blue-50 transition-colors"
-                        >
-                          View Results
-                        </button>
-                        <button
-                          onClick={() => deleteHistoryItem(item.id)}
-                          className="text-red-600 hover:text-red-700 text-sm font-medium px-3 py-1 rounded-lg hover:bg-red-50 transition-colors"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Toast Notifications */}
+      <div className="fixed top-4 right-4 z-50 space-y-2">
+        {toasts.map((toast) => (
+          <Toast
+            key={toast.id}
+            message={toast.message}
+            type={toast.type}
+            onClose={() => removeToast(toast.id)}
+          />
+        ))}
       </div>
+
+      {/* Sidebar Navigation */}
+      <div
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`}
+      >
+        {/* Sidebar Header */}
+        <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200">
+          <div className="flex items-center space-x-3">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-2 rounded-lg">
+              <Zap className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-gray-900">TavSearch AI</h1>
+              <p className="text-xs text-gray-600">Multi-Agent System</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="lg:hidden text-gray-500 hover:text-gray-700"
+          >
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+
+        {/* Navigation Links */}
+        <nav className="mt-6 px-3">
+          <div className="space-y-1">
+            {navigation.map((item) => {
+              const isActive =
+                currentView === item.id ||
+                (currentView === 'analyzing' && item.id === 'dashboard') ||
+                (currentView === 'results' && item.id === 'dashboard');
+              const Icon = item.icon;
+
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => handleNavigation(item.id)}
+                  className={`w-full flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-colors group ${
+                    isActive
+                      ? 'bg-blue-100 text-blue-700 border-l-4 border-blue-600'
+                      : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                  }`}
+                >
+                  <Icon
+                    className={`h-5 w-5 mr-3 ${isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'}`}
+                  />
+                  <div className="flex-1 text-left">
+                    <div className="font-medium">{item.name}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">{item.description}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+
+        {/* System Status in Sidebar */}
+        <div className="mt-8 px-3">
+          <div className="bg-gray-50 rounded-lg p-3">
+            <h4 className="text-sm font-medium text-gray-900 mb-2">System Status</h4>
+            <div className="flex items-center space-x-2 text-xs">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <span className="text-gray-600">All Systems Operational</span>
+            </div>
+            <div className="mt-2 text-xs text-gray-500">
+              <div>🤖 5 AI Agents Active</div>
+              <div>🔍 Real-time Search Ready</div>
+              <div>📊 Analytics Processing</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200">
+          <div className="text-xs text-gray-500 text-center space-y-1">
+            <div className="flex items-center justify-center space-x-1">
+              <Sparkles className="h-3 w-3" />
+              <span>LangChain Multi-Agent</span>
+            </div>
+            <div>v2.0.0 • Enterprise Ready</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div className="flex-1 lg:ml-0">
+        {/* Mobile Header */}
+        <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            <Menu className="h-6 w-6" />
+          </button>
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+            <span className="text-sm text-gray-600">Online</span>
+          </div>
+        </div>
+
+        {/* Page Content */}
+        <main className="px-4 sm:px-6 lg:px-8 py-8">{renderCurrentView()}</main>
+      </div>
+
+      {/* Export Manager Modal */}
+      {showExportManager && (
+        <ExportManager
+          queryId={currentAnalysis?.queryId}
+          onClose={() => setShowExportManager(false)}
+        />
+      )}
+
+      {/* Mobile Sidebar Overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Global Styles */}
+      <style jsx>{`
+        .transition-transform {
+          transition-property: transform;
+          transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+          transition-duration: 300ms;
+        }
+      `}</style>
     </div>
   );
 };
 
-export default TavSearchApp;
+export default App;

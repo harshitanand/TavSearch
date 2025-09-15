@@ -34,14 +34,18 @@ class App {
       })
     );
 
-    this.app.use(
-      cors({
-        origin: config.cors.origin,
-        credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id'],
-      })
-    );
+    this.app.use((req, res, next) => {
+      res.header('Access-Control-Allow-Origin', '*');
+      res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
+      res.header('Access-Control-Allow-Headers', '*');
+      res.header('Access-Control-Allow-Credentials', 'true');
+
+      if (req.method === 'OPTIONS') {
+        res.sendStatus(200);
+      } else {
+        next();
+      }
+    });
 
     // Rate limiting
     const limiter = rateLimit({

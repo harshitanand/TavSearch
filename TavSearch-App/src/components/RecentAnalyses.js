@@ -1,18 +1,68 @@
-import React from 'react';
-import { useQuery } from 'react-query';
-import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { FileText, Clock, CheckCircle, XCircle, Loader2, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  CheckCircle,
+  XCircle,
+  Clock,
+  Loader2,
+  ExternalLink,
+  RefreshCw,
+  FileText,
+} from 'lucide-react';
 import { api } from '../services/api';
 
-const RecentAnalyses = () => {
-  const {
-    data: analyses,
-    isLoading,
-    error,
-  } = useQuery('recent-analyses', () => api.getUserAnalyses('demo-user'), {
-    refetchInterval: 30000, // Refetch every 30 seconds
-  });
+const RecentAnalyses = ({ onSelectAnalysis, refreshTrigger }) => {
+  const [analyses, setAnalyses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchAnalyses = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Try real API first, fallback to mock data
+        try {
+          const response = await api.getUserAnalyses({ limit: 10 });
+          setAnalyses(response.data || []);
+        } catch (apiError) {
+          console.log('API not available, using mock data');
+          // Mock data for development
+          const mockAnalyses = [
+            {
+              _id: 'analysis-1',
+              queryText: 'AI software companies competitive analysis',
+              status: 'completed',
+              createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+              framework: 'langchain-multiagent',
+            },
+            {
+              _id: 'analysis-2',
+              queryText: 'Renewable energy investment opportunities',
+              status: 'processing',
+              createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+              framework: 'langchain-multiagent',
+            },
+            {
+              _id: 'analysis-3',
+              queryText: 'Fintech startup landscape Southeast Asia',
+              status: 'failed',
+              createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+              framework: 'langchain-multiagent',
+            },
+          ];
+          setAnalyses(mockAnalyses);
+        }
+      } catch (err) {
+        setError(err.message);
+        console.error('Failed to fetch analyses:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAnalyses();
+  }, [refreshTrigger]);
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -44,9 +94,9 @@ const RecentAnalyses = () => {
     );
   };
 
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="bg-white rounded-xl shadow-lg p-6">
+      <div className="bg-white border border-gray-200 rounded-xl p-6">
         <h3 className="text-xl font-semibold text-gray-900 mb-4">Recent Analyses</h3>
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
@@ -67,81 +117,75 @@ const RecentAnalyses = () => {
 
   if (error) {
     return (
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-xl font-semibold text-gray-900 mb-4">Recent Analyses</h3>
-        <div className="text-center py-8">
-          <XCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
-          <p className="text-gray-600">Failed to load recent analyses</p>
+      <div className="bg-red-50 border border-red-200 rounded-xl p-6">
+        <div className="flex items-start space-x-3">
+          <XCircle className="h-6 w-6 text-red-500 mt-1" />
+          <div className="flex-1">
+            <h3 className="font-semibold text-red-900">Error Loading Analyses</h3>
+            <p className="text-red-700 mt-1">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-3 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm"
+            >
+              <RefreshCw className="h-4 w-4 inline mr-1" />
+              Try Again
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
-  const recentAnalyses = analyses?.analyses || [];
-
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="bg-white border border-gray-200 rounded-xl p-6">
+      <div className="flex items-center justify-between mb-4">
         <h3 className="text-xl font-semibold text-gray-900">Recent Analyses</h3>
-        <Link
-          to="/history"
-          className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center space-x-1"
+        <button
+          onClick={() => window.location.reload()}
+          className="text-gray-500 hover:text-gray-700 transition-colors"
+          title="Refresh"
         >
-          <span>View All</span>
-          <ArrowRight className="h-4 w-4" />
-        </Link>
+          <RefreshCw className="h-5 w-5" />
+        </button>
       </div>
 
-      {recentAnalyses.length === 0 ? (
-        <div className="text-center py-12">
-          <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-          <h4 className="text-lg font-medium text-gray-900 mb-2">No Analyses Yet</h4>
-          <p className="text-gray-600">Start your first market intelligence analysis above.</p>
+      {analyses.length === 0 ? (
+        <div className="text-center py-8">
+          <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+          <p className="text-gray-500">No analyses yet. Start your first one above!</p>
         </div>
       ) : (
         <div className="space-y-4">
-          {recentAnalyses.slice(0, 5).map((analysis, index) => (
-            <motion.div
+          {analyses.map((analysis) => (
+            <div
               key={analysis._id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+              className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+              onClick={() => onSelectAnalysis(analysis)}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3 flex-1 min-w-0">
-                  <div className="flex-shrink-0">{getStatusIcon(analysis.status)}</div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-medium text-gray-900 truncate">
-                      {analysis.queryText}
-                    </h4>
-                    <div className="flex items-center space-x-4 mt-1">
-                      <p className="text-sm text-gray-500">
-                        {new Date(analysis.createdAt).toLocaleDateString()}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {new Date(analysis.createdAt).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </p>
-                    </div>
+              <div className="flex items-center space-x-4">
+                {getStatusIcon(analysis.status)}
+                <div>
+                  <h4 className="font-medium text-gray-900">{analysis.queryText}</h4>
+                  <div className="flex items-center space-x-2 text-sm text-gray-600">
+                    <span>
+                      {new Date(analysis.createdAt).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                    {analysis.framework && (
+                      <span className="text-blue-600">• {analysis.framework}</span>
+                    )}
                   </div>
                 </div>
-
-                <div className="flex items-center space-x-3">
-                  {getStatusBadge(analysis.status)}
-                  {analysis.status === 'completed' && (
-                    <Link
-                      to={`/results/${analysis._id}`}
-                      className="text-blue-600 hover:text-blue-700 font-medium text-sm"
-                    >
-                      View Results
-                    </Link>
-                  )}
-                </div>
               </div>
-            </motion.div>
+              <div className="flex items-center space-x-3">
+                {getStatusBadge(analysis.status)}
+                <ExternalLink className="h-4 w-4 text-gray-400" />
+              </div>
+            </div>
           ))}
         </div>
       )}
