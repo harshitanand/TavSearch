@@ -1,0 +1,2195 @@
+{
+  "info": {
+    "name": "TavSearch Multi-Agent API - Complete Collection",
+    "description": "Comprehensive API collection for the LangChain Multi-Agent Market Intelligence System with full testing suite",
+    "version": "2.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string",
+      "description": "Backend API base URL"
+    },
+    {
+      "key": "user_id",
+      "value": "demo-user",
+      "type": "string",
+      "description": "Default user ID for testing"
+    },
+    {
+      "key": "query_id",
+      "value": "",
+      "type": "string",
+      "description": "Current analysis query ID (auto-populated)"
+    },
+    {
+      "key": "test_query_id",
+      "value": "",
+      "type": "string",
+      "description": "Test workflow query ID"
+    }
+  ],
+  "auth": {
+    "type": "noauth"
+  },
+  "item": [
+    {
+      "name": "🔍 System Health & Status",
+      "description": "System health checks and API documentation endpoints",
+      "item": [
+        {
+          "name": "Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Health check passes', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.success).to.eql(true);",
+                  "    pm.expect(response.data.status).to.eql('operational');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            },
+            "description": "Basic system health check endpoint"
+          },
+          "response": []
+        },
+        {
+          "name": "API Root Info",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('API info is correct', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.success).to.eql(true);",
+                  "    pm.expect(response.data.name).to.eql('TavSearch Multi-Agent API');",
+                  "    pm.expect(response.data.framework).to.include('LangChain');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api",
+              "host": ["{{base_url}}"],
+              "path": ["api"]
+            },
+            "description": "Get API information and available endpoints"
+          },
+          "response": []
+        },
+        {
+          "name": "API Documentation",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/docs",
+              "host": ["{{base_url}}"],
+              "path": ["docs"]
+            },
+            "description": "Complete API documentation with all endpoints"
+          },
+          "response": []
+        },
+        {
+          "name": "System Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('System status shows all agents active', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data.agents.planner).to.eql('active');",
+                  "    pm.expect(response.data.agents.searcher).to.eql('active');",
+                  "    pm.expect(response.data.agents.analyzer).to.eql('active');",
+                  "    pm.expect(response.data.agents.synthesizer).to.eql('active');",
+                  "    pm.expect(response.data.agents.validator).to.eql('active');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analysis/system/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis", "system", "status"]
+            },
+            "description": "Get comprehensive system status including all 5 agents"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🤖 Analysis Endpoints",
+      "description": "Multi-agent analysis workflow endpoints",
+      "item": [
+        {
+          "name": "Start New Analysis",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Analysis started successfully', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.success).to.eql(true);",
+                  "    pm.expect(response.data).to.have.property('queryId');",
+                  "    pm.expect(response.data.framework).to.eql('langchain-multiagent');",
+                  "    ",
+                  "    // Save queryId for subsequent requests",
+                  "    if (response.data.queryId) {",
+                  "        pm.collectionVariables.set('query_id', response.data.queryId);",
+                  "        console.log('Query ID saved:', response.data.queryId);",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"Analyze the current state of the electric vehicle market in 2024 - key players, market size, growth trends, and future outlook\",\n  \"userId\": \"{{user_id}}\",\n  \"priority\": \"normal\",\n  \"tags\": [\"electric-vehicles\", \"market-research\", \"2024\", \"automotive\"],\n  \"framework\": \"langchain-multiagent\",\n  \"options\": {\n    \"searchDepth\": \"advanced\",\n    \"maxResults\": 15,\n    \"includeCharts\": true,\n    \"reportFormat\": \"comprehensive\",\n    \"includeDomains\": [\"reuters.com\", \"bloomberg.com\", \"marketresearch.com\"],\n    \"excludeDomains\": [\"reddit.com\", \"quora.com\"]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/analysis",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis"]
+            },
+            "description": "Start a new multi-agent analysis workflow"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Analysis Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status retrieved successfully', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.have.property('status');",
+                  "    pm.expect(response.data).to.have.property('progress');",
+                  "    pm.expect(response.data.progress).to.have.property('percentage');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analysis/{{query_id}}/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis", "{{query_id}}", "status"]
+            },
+            "description": "Get real-time status of analysis including agent progress"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Analysis Results",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Results retrieved successfully', function () {",
+                  "    if (pm.response.code === 200) {",
+                  "        const response = pm.response.json();",
+                  "        pm.expect(response.data).to.have.property('results');",
+                  "        pm.expect(response.data.results).to.have.property('summary');",
+                  "    } else if (pm.response.code === 202) {",
+                  "        console.log('Analysis still in progress');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analysis/{{query_id}}/results",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis", "{{query_id}}", "results"]
+            },
+            "description": "Get complete analysis results when processing is finished"
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Analyses",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('User analyses retrieved', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.have.property('analyses');",
+                  "    pm.expect(response.data.analyses).to.be.an('array');",
+                  "    pm.expect(response.data).to.have.property('pagination');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analysis?limit=10&status=completed&sortBy=createdAt&sortOrder=desc",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Number of results to return"
+                },
+                {
+                  "key": "status",
+                  "value": "completed",
+                  "description": "Filter by status"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "createdAt",
+                  "description": "Sort field"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "desc",
+                  "description": "Sort direction"
+                }
+              ]
+            },
+            "description": "Get paginated list of user's analyses with filtering"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Recent Analyses",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analysis/recent?limit=5",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis", "recent"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            },
+            "description": "Get recent analyses for dashboard display"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Analysis Statistics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analysis/stats?period=30d&includeCharts=true",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis", "stats"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "30d",
+                  "description": "Time period for stats"
+                },
+                {
+                  "key": "includeCharts",
+                  "value": "true",
+                  "description": "Include chart data"
+                }
+              ]
+            },
+            "description": "Get comprehensive analysis statistics and metrics"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Workflow Diagram",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Workflow diagram retrieved', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.have.property('nodes');",
+                  "    pm.expect(response.data).to.have.property('edges');",
+                  "    pm.expect(response.data.nodes).to.have.lengthOf(5); // 5 agents",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analysis/workflow/diagram",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis", "workflow", "diagram"]
+            },
+            "description": "Get multi-agent workflow diagram for visualization"
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Analysis",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analysis/{{query_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis", "{{query_id}}"]
+            },
+            "description": "Cancel a running analysis"
+          },
+          "response": []
+        },
+        {
+          "name": "Retry Failed Analysis",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Analysis retry initiated', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.have.property('newQueryId');",
+                  "    pm.expect(response.data.status).to.eql('processing');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analysis/{{query_id}}/retry",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis", "{{query_id}}", "retry"]
+            },
+            "description": "Retry a failed analysis with improved parameters"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "📊 Export Endpoints",
+      "description": "Report export functionality in multiple formats",
+      "item": [
+        {
+          "name": "Get Available Export Formats",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Export formats available', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data.formats).to.include.members(['json', 'html', 'pdf', 'csv', 'docx']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/export/{{query_id}}/formats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "export", "{{query_id}}", "formats"]
+            },
+            "description": "Get list of available export formats for an analysis"
+          },
+          "response": []
+        },
+        {
+          "name": "Export as JSON",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/export/{{query_id}}/json",
+              "host": ["{{base_url}}"],
+              "path": ["api", "export", "{{query_id}}", "json"]
+            },
+            "description": "Export analysis results as structured JSON"
+          },
+          "response": []
+        },
+        {
+          "name": "Export as HTML Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "text/html",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/export/{{query_id}}/html",
+              "host": ["{{base_url}}"],
+              "path": ["api", "export", "{{query_id}}", "html"]
+            },
+            "description": "Export as professional HTML report with styling"
+          },
+          "response": []
+        },
+        {
+          "name": "Export as PDF",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/pdf",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/export/{{query_id}}/pdf",
+              "host": ["{{base_url}}"],
+              "path": ["api", "export", "{{query_id}}", "pdf"]
+            },
+            "description": "Export as PDF document"
+          },
+          "response": []
+        },
+        {
+          "name": "Export as CSV Data",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "text/csv",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/export/{{query_id}}/csv",
+              "host": ["{{base_url}}"],
+              "path": ["api", "export", "{{query_id}}", "csv"]
+            },
+            "description": "Export data as CSV for spreadsheet analysis"
+          },
+          "response": []
+        },
+        {
+          "name": "Export as Word Document",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/export/{{query_id}}/docx",
+              "host": ["{{base_url}}"],
+              "path": ["api", "export", "{{query_id}}", "docx"]
+            },
+            "description": "Export as Microsoft Word document"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Export History",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Export history retrieved', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.have.property('exports');",
+                  "    pm.expect(response.data.exports).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/export/history?limit=20&format=all",
+              "host": ["{{base_url}}"],
+              "path": ["api", "export", "history"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "format",
+                  "value": "all",
+                  "description": "Filter by format (pdf, json, html, csv, docx, all)"
+                }
+              ]
+            },
+            "description": "Get user's export history with filtering options"
+          },
+          "response": []
+        },
+        {
+          "name": "Download Export by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/export/download/{{export_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "export", "download", "{{export_id}}"]
+            },
+            "description": "Download a previously generated export by ID"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "👤 User Management",
+      "description": "User profile and account management",
+      "item": [
+        {
+          "name": "Get User Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('User profile retrieved', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.have.property('userId');",
+                  "    pm.expect(response.data).to.have.property('profile');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/users/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "profile"]
+            },
+            "description": "Get current user profile information"
+          },
+          "response": []
+        },
+        {
+          "name": "Update User Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Profile updated successfully', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.success).to.eql(true);",
+                  "    pm.expect(response.data.profile.name).to.eql('John Doe Updated');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe Updated\",\n  \"email\": \"john.doe@example.com\",\n  \"company\": \"Tech Corp LLC\",\n  \"industry\": \"Technology & Software\",\n  \"jobTitle\": \"Senior Market Analyst\",\n  \"preferences\": {\n    \"notifications\": {\n      \"email\": true,\n      \"push\": false,\n      \"sms\": false\n    },\n    \"emailReports\": true,\n    \"theme\": \"dark\",\n    \"defaultExportFormat\": \"pdf\",\n    \"language\": \"en\",\n    \"timezone\": \"America/New_York\"\n  },\n  \"settings\": {\n    \"autoSaveReports\": true,\n    \"shareAnalytics\": false,\n    \"betaFeatures\": true\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "profile"]
+            },
+            "description": "Update user profile and preferences"
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Usage Statistics",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Usage stats retrieved', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.have.property('totalAnalyses');",
+                  "    pm.expect(response.data).to.have.property('periodUsage');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/users/usage?period=30d&includeDetails=true",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "usage"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "30d",
+                  "description": "Time period (7d, 30d, 90d, 1y)"
+                },
+                {
+                  "key": "includeDetails",
+                  "value": "true",
+                  "description": "Include detailed breakdown"
+                }
+              ]
+            },
+            "description": "Get user usage statistics and quota information"
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/users/analytics?period=7d&metrics=all",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "analytics"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "7d"
+                },
+                {
+                  "key": "metrics",
+                  "value": "all",
+                  "description": "Metrics to include (usage, performance, trends, all)"
+                }
+              ]
+            },
+            "description": "Get detailed user analytics and insights"
+          },
+          "response": []
+        },
+        {
+          "name": "Update User Subscription",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plan\": \"pro\",\n  \"billingCycle\": \"monthly\",\n  \"features\": {\n    \"maxAnalysesPerMonth\": 100,\n    \"advancedAnalytics\": true,\n    \"prioritySupport\": true,\n    \"exportFormats\": [\"json\", \"html\", \"pdf\", \"csv\", \"docx\"],\n    \"apiAccess\": true,\n    \"customBranding\": false\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/{{user_id}}/subscription",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "{{user_id}}", "subscription"]
+            },
+            "description": "Update user subscription plan and features"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete User Account",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"confirmation\": \"DELETE_ACCOUNT\",\n  \"reason\": \"Testing account deletion\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "profile"]
+            },
+            "description": "Delete user account and all associated data"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "📈 Analytics & Monitoring",
+      "description": "System analytics and performance monitoring",
+      "item": [
+        {
+          "name": "Get Dashboard Metrics",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Dashboard metrics retrieved', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.have.property('totalAnalyses');",
+                  "    pm.expect(response.data).to.have.property('activeUsers');",
+                  "    pm.expect(response.data).to.have.property('systemHealth');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analytics/dashboard?timeframe=24h&includeCharts=true",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analytics", "dashboard"],
+              "query": [
+                {
+                  "key": "timeframe",
+                  "value": "24h",
+                  "description": "Time frame (1h, 6h, 24h, 7d, 30d)"
+                },
+                {
+                  "key": "includeCharts",
+                  "value": "true",
+                  "description": "Include chart data for visualizations"
+                }
+              ]
+            },
+            "description": "Get comprehensive dashboard metrics and KPIs"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Query Trends",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Query trends retrieved', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.have.property('trends');",
+                  "    pm.expect(response.data.trends).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analytics/trends?period=30d&groupBy=day&category=all",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analytics", "trends"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "30d",
+                  "description": "Analysis period"
+                },
+                {
+                  "key": "groupBy",
+                  "value": "day",
+                  "description": "Group by (hour, day, week, month)"
+                },
+                {
+                  "key": "category",
+                  "value": "all",
+                  "description": "Analysis category filter"
+                }
+              ]
+            },
+            "description": "Get analysis trends and usage patterns"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Usage Statistics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analytics/usage?period=7d&breakdown=true",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analytics", "usage"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "7d"
+                },
+                {
+                  "key": "breakdown",
+                  "value": "true",
+                  "description": "Include detailed breakdown by agent/feature"
+                }
+              ]
+            },
+            "description": "Get detailed usage statistics across all features"
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Analytics Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analytics/user?timeframe=week&includeComparisons=true",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analytics", "user"],
+              "query": [
+                {
+                  "key": "timeframe",
+                  "value": "week"
+                },
+                {
+                  "key": "includeComparisons",
+                  "value": "true",
+                  "description": "Include period-over-period comparisons"
+                }
+              ]
+            },
+            "description": "Get personalized user analytics summary"
+          },
+          "response": []
+        },
+        {
+          "name": "Get System Performance Metrics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "admin-user",
+                "type": "text",
+                "description": "Admin access required"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analytics/performance?period=24h&agents=all",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analytics", "performance"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "24h"
+                },
+                {
+                  "key": "agents",
+                  "value": "all",
+                  "description": "Agent performance metrics (planner, searcher, analyzer, synthesizer, validator, all)"
+                }
+              ]
+            },
+            "description": "Get system performance metrics (admin only)"
+          },
+          "response": []
+        },
+        {
+          "name": "Get API Rate Limit Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analytics/ratelimit",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analytics", "ratelimit"]
+            },
+            "description": "Get current rate limit status for user"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🧪 Test Workflows",
+      "description": "Comprehensive testing workflows for validation",
+      "item": [
+        {
+          "name": "Complete Analysis Workflow Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Complete workflow test passed', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('success', true);",
+                  "    pm.expect(response.data).to.have.property('queryId');",
+                  "    pm.expect(response.data.framework).to.eql('langchain-multiagent');",
+                  "    ",
+                  "    // Save queryId for subsequent workflow tests",
+                  "    if (response.data.queryId) {",
+                  "        pm.collectionVariables.set('test_query_id', response.data.queryId);",
+                  "        console.log('Test Query ID saved:', response.data.queryId);",
+                  "    }",
+                  "    ",
+                  "    // Verify agents are listed",
+                  "    pm.expect(response.data.agents).to.be.an('array');",
+                  "    pm.expect(response.data.agents).to.have.lengthOf(5);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "x-user-id",
+                "value": "test-user-{{$randomUUID}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"Test analysis: AI market trends 2024 - comprehensive market research\",\n  \"userId\": \"test-user-workflow\",\n  \"priority\": \"normal\",\n  \"tags\": [\"test\", \"ai-market\", \"workflow\", \"automated-test\"],\n  \"framework\": \"langchain-multiagent\",\n  \"options\": {\n    \"searchDepth\": \"basic\",\n    \"maxResults\": 5,\n    \"testMode\": true,\n    \"timeout\": 120000\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/analysis",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis"]
+            },
+            "description": "Test complete multi-agent workflow from start to finish"
+          },
+          "response": []
+        },
+        {
+          "name": "Error Handling Test - Invalid Query",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Error handling for invalid query works', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([400, 422]);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('success', false);",
+                  "    pm.expect(response).to.have.property('message');",
+                  "    pm.expect(response.message).to.include('Query');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"\",\n  \"userId\": \"{{user_id}}\",\n  \"tags\": [\"error-test\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/analysis",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis"]
+            },
+            "description": "Test error handling for invalid/empty query"
+          },
+          "response": []
+        },
+        {
+          "name": "Error Handling Test - Missing User ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Missing user ID handled correctly', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([400, 401, 403]);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.success).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"Test query without user ID\",\n  \"tags\": [\"auth-test\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/analysis",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis"]
+            },
+            "description": "Test authentication error handling"
+          },
+          "response": []
+        },
+        {
+          "name": "Rate Limiting Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Rate limiting works correctly', function () {",
+                  "    // This test should eventually hit rate limits with rapid requests",
+                  "    if (pm.response.code === 429) {",
+                  "        const response = pm.response.json();",
+                  "        pm.expect(response).to.have.property('message');",
+                  "        pm.expect(response.message).to.include('rate');",
+                  "        console.log('Rate limit reached - this is expected behavior');",
+                  "    } else {",
+                  "        pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "        console.log('Request allowed - rate limit not yet reached');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "rate-test-{{$randomUUID}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analysis/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis", "stats"]
+            },
+            "description": "Test rate limiting functionality"
+          },
+          "response": []
+        },
+        {
+          "name": "Data Persistence Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('MongoDB data persistence works', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('success', true);",
+                  "    pm.expect(response.data).to.have.property('analyses');",
+                  "    pm.expect(response.data.analyses).to.be.an('array');",
+                  "    ",
+                  "    // Verify MongoDB data structure",
+                  "    if (response.data.analyses.length > 0) {",
+                  "        const analysis = response.data.analyses[0];",
+                  "        pm.expect(analysis).to.have.property('queryId');",
+                  "        pm.expect(analysis).to.have.property('createdAt');",
+                  "        pm.expect(analysis).to.have.property('status');",
+                  "        pm.expect(analysis).to.have.property('framework');",
+                  "        console.log('MongoDB persistence verified - found', response.data.analyses.length, 'records');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analysis?limit=5&sortBy=createdAt&sortOrder=desc",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "5"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "createdAt"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "desc"
+                }
+              ]
+            },
+            "description": "Verify MongoDB Atlas data persistence and retrieval"
+          },
+          "response": []
+        },
+        {
+          "name": "Multi-Agent System Status Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Multi-agent system operational', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('success', true);",
+                  "    pm.expect(response.data).to.have.property('agents');",
+                  "    ",
+                  "    // Verify all 5 agents are active",
+                  "    const agents = response.data.agents;",
+                  "    pm.expect(agents).to.have.property('planner', 'active');",
+                  "    pm.expect(agents).to.have.property('searcher', 'active');",
+                  "    pm.expect(agents).to.have.property('analyzer', 'active');",
+                  "    pm.expect(agents).to.have.property('synthesizer', 'active');",
+                  "    pm.expect(agents).to.have.property('validator', 'active');",
+                  "    ",
+                  "    // Verify framework information",
+                  "    pm.expect(response.data).to.have.property('framework', 'LangChain Multi-Agent System');",
+                  "    pm.expect(response.data.services).to.have.property('search', 'Tavily API');",
+                  "    pm.expect(response.data.services).to.have.property('llm', 'OpenAI GPT-4');",
+                  "    pm.expect(response.data.services).to.have.property('database', 'MongoDB Atlas');",
+                  "    ",
+                  "    console.log('All 5 agents verified as active');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analysis/system/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis", "system", "status"]
+            },
+            "description": "Verify all multi-agent system components are operational"
+          },
+          "response": []
+        },
+        {
+          "name": "Export Functionality Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Export functionality available', function () {",
+                  "    if (pm.response.code === 404) {",
+                  "        console.log('No analysis found for export test - this is expected for new test runs');",
+                  "        pm.expect(pm.response.code).to.eql(404);",
+                  "    } else {",
+                  "        const response = pm.response.json();",
+                  "        pm.expect(response).to.have.property('success', true);",
+                  "        pm.expect(response.data).to.have.property('formats');",
+                  "        ",
+                  "        const formats = response.data.formats;",
+                  "        pm.expect(formats).to.include.members(['json', 'html', 'pdf', 'csv', 'docx']);",
+                  "        console.log('Export formats verified:', formats.join(', '));",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/export/{{query_id}}/formats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "export", "{{query_id}}", "formats"]
+            },
+            "description": "Test export functionality and available formats"
+          },
+          "response": []
+        },
+        {
+          "name": "API Response Time Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('API response time acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(5000); // 5 seconds max for health check",
+                  "    console.log('Response time:', pm.response.responseTime, 'ms');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            },
+            "description": "Test API response time performance"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "⚡ Load Testing",
+      "description": "Performance and load testing scenarios",
+      "item": [
+        {
+          "name": "Concurrent Analysis Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Concurrent analysis handling', function () {",
+                  "    const response = pm.response.json();",
+                  "    // Should either succeed or return proper error for rate limiting/capacity",
+                  "    pm.expect([200, 201, 429, 503]).to.include(pm.response.code);",
+                  "    ",
+                  "    if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "        pm.expect(response).to.have.property('success', true);",
+                  "        pm.expect(response.data).to.have.property('queryId');",
+                  "        console.log('Concurrent request accepted:', response.data.queryId);",
+                  "    } else if (pm.response.code === 429) {",
+                  "        console.log('Rate limit reached - system protecting resources');",
+                  "    } else if (pm.response.code === 503) {",
+                  "        console.log('Service unavailable - system at capacity');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "x-user-id",
+                "value": "load-test-{{$randomUUID}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"Load test query {{$randomInt}}: Market analysis for concurrent processing\",\n  \"userId\": \"load-test-{{$randomUUID}}\",\n  \"priority\": \"low\",\n  \"tags\": [\"load-test\", \"concurrent\", \"performance\"],\n  \"framework\": \"langchain-multiagent\",\n  \"options\": {\n    \"searchDepth\": \"basic\",\n    \"maxResults\": 3,\n    \"timeout\": 60000\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/analysis",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis"]
+            },
+            "description": "Test concurrent analysis processing capabilities"
+          },
+          "response": []
+        },
+        {
+          "name": "High Frequency Status Checks",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('High frequency requests handled', function () {",
+                  "    pm.expect([200, 429]).to.include(pm.response.code);",
+                  "    ",
+                  "    if (pm.response.code === 429) {",
+                  "        console.log('Rate limiting working correctly');",
+                  "    } else {",
+                  "        console.log('Request processed successfully');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "load-test-{{$randomUUID}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analysis/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis", "stats"]
+            },
+            "description": "Test high frequency API calls for rate limiting"
+          },
+          "response": []
+        },
+        {
+          "name": "Memory Usage Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('System memory usage acceptable', function () {",
+                  "    const response = pm.response.json();",
+                  "    if (response.data && response.data.memory) {",
+                  "        const memoryUsed = response.data.memory.used;",
+                  "        const memoryTotal = response.data.memory.total;",
+                  "        const memoryUsagePercent = (memoryUsed / memoryTotal) * 100;",
+                  "        ",
+                  "        pm.expect(memoryUsagePercent).to.be.below(90); // Less than 90% memory usage",
+                  "        console.log('Memory usage:', memoryUsagePercent.toFixed(2) + '%');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            },
+            "description": "Monitor system memory usage during load"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🔐 Security Tests",
+      "description": "Security and authentication testing",
+      "item": [
+        {
+          "name": "SQL Injection Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('SQL injection protection works', function () {",
+                  "    // Should not crash the server and should handle malicious input safely",
+                  "    pm.expect([400, 422, 200]).to.include(pm.response.code);",
+                  "    ",
+                  "    if (pm.response.code === 200) {",
+                  "        const response = pm.response.json();",
+                  "        // Should not contain raw SQL or error messages",
+                  "        pm.expect(JSON.stringify(response)).to.not.include('SELECT');",
+                  "        pm.expect(JSON.stringify(response)).to.not.include('DROP TABLE');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"'; DROP TABLE users; --\",\n  \"userId\": \"{{user_id}}\",\n  \"tags\": [\"security-test\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/analysis",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis"]
+            },
+            "description": "Test SQL injection protection (MongoDB should be immune but testing input sanitization)"
+          },
+          "response": []
+        },
+        {
+          "name": "XSS Protection Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('XSS protection works', function () {",
+                  "    pm.expect([400, 422, 200]).to.include(pm.response.code);",
+                  "    ",
+                  "    if (pm.response.code === 200) {",
+                  "        const response = pm.response.json();",
+                  "        // Response should not contain unescaped script tags",
+                  "        const responseStr = JSON.stringify(response);",
+                  "        pm.expect(responseStr).to.not.include('<script>');",
+                  "        pm.expect(responseStr).to.not.include('javascript:');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"<script>alert('XSS')</script>Test analysis\",\n  \"userId\": \"{{user_id}}\",\n  \"tags\": [\"<img src=x onerror=alert('XSS')>\"],\n  \"options\": {\n    \"description\": \"javascript:alert('XSS')\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/analysis",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis"]
+            },
+            "description": "Test XSS protection and input sanitization"
+          },
+          "response": []
+        },
+        {
+          "name": "Authorization Test - Wrong User Access",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Authorization prevents wrong user access', function () {",
+                  "    // Should deny access to other user's data",
+                  "    pm.expect([401, 403, 404]).to.include(pm.response.code);",
+                  "    ",
+                  "    if (pm.response.code === 404) {",
+                  "        console.log('No data found - expected for cross-user access attempt');",
+                  "    } else {",
+                  "        const response = pm.response.json();",
+                  "        pm.expect(response.success).to.eql(false);",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "wrong-user-id",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analysis/{{query_id}}/results",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis", "{{query_id}}", "results"]
+            },
+            "description": "Test that users cannot access other users' data"
+          },
+          "response": []
+        },
+        {
+          "name": "Malformed JSON Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Malformed JSON handled gracefully', function () {",
+                  "    pm.expect(pm.response.code).to.eql(400);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.success).to.eql(false);",
+                  "    pm.expect(response.message).to.include('JSON');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"Test analysis\",\n  \"userId\": \"{{user_id}}\",\n  \"malformed\": true,\n  \"tags\": [\"security-test\"\n  // Missing closing bracket and comma errors"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/analysis",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis"]
+            },
+            "description": "Test handling of malformed JSON requests"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "📋 Integration Tests",
+      "description": "End-to-end integration testing scenarios",
+      "item": [
+        {
+          "name": "Full Pipeline Test - Start to Export",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// This is Step 1 of the full pipeline test",
+                  "pm.test('Pipeline Step 1: Analysis started', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.success).to.eql(true);",
+                  "    pm.expect(response.data.queryId).to.exist;",
+                  "    ",
+                  "    // Save for pipeline continuation",
+                  "    pm.collectionVariables.set('pipeline_query_id', response.data.queryId);",
+                  "    console.log('Pipeline started with Query ID:', response.data.queryId);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "x-user-id",
+                "value": "pipeline-test-{{$randomUUID}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"Integration test: Renewable energy market analysis 2024\",\n  \"userId\": \"pipeline-test-integration\",\n  \"priority\": \"high\",\n  \"tags\": [\"integration-test\", \"renewable-energy\", \"full-pipeline\"],\n  \"framework\": \"langchain-multiagent\",\n  \"options\": {\n    \"searchDepth\": \"advanced\",\n    \"maxResults\": 8,\n    \"includeCharts\": true,\n    \"testMode\": false\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/analysis",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis"]
+            },
+            "description": "Step 1: Start comprehensive analysis for full pipeline test"
+          },
+          "response": []
+        },
+        {
+          "name": "Pipeline Test - Monitor Progress",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// This monitors the pipeline progress",
+                  "pm.test('Pipeline Step 2: Progress monitoring', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.success).to.eql(true);",
+                  "    pm.expect(response.data.progress).to.exist;",
+                  "    ",
+                  "    const progress = response.data.progress;",
+                  "    console.log('Pipeline progress:', progress.percentage + '%', '- Current step:', response.data.currentStep);",
+                  "    ",
+                  "    // Pipeline is either processing or completed",
+                  "    pm.expect(['processing', 'completed', 'queued']).to.include(response.data.status);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "pipeline-test-integration",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analysis/{{pipeline_query_id}}/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis", "{{pipeline_query_id}}", "status"]
+            },
+            "description": "Step 2: Monitor pipeline progress and agent execution"
+          },
+          "response": []
+        },
+        {
+          "name": "Database Integration Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Database integration working', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.success).to.eql(true);",
+                  "    pm.expect(response.data.analyses).to.be.an('array');",
+                  "    ",
+                  "    // Check MongoDB Atlas data structure",
+                  "    if (response.data.analyses.length > 0) {",
+                  "        const analysis = response.data.analyses[0];",
+                  "        ",
+                  "        // Verify required MongoDB fields",
+                  "        pm.expect(analysis).to.have.property('queryId');",
+                  "        pm.expect(analysis).to.have.property('userId');",
+                  "        pm.expect(analysis).to.have.property('query');",
+                  "        pm.expect(analysis).to.have.property('status');",
+                  "        pm.expect(analysis).to.have.property('framework');",
+                  "        pm.expect(analysis).to.have.property('createdAt');",
+                  "        ",
+                  "        // Verify framework value",
+                  "        pm.expect(analysis.framework).to.eql('langchain-multiagent');",
+                  "        ",
+                  "        console.log('MongoDB integration verified - found', response.data.analyses.length, 'records');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analysis?limit=10&includeWorkflowState=true",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "includeWorkflowState",
+                  "value": "true",
+                  "description": "Include workflow state data"
+                }
+              ]
+            },
+            "description": "Test MongoDB Atlas integration and data persistence"
+          },
+          "response": []
+        },
+        {
+          "name": "API Integration Test - All Services",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('All API services integrated correctly', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.success).to.eql(true);",
+                  "    ",
+                  "    const services = response.data.services;",
+                  "    pm.expect(services.multiAgent).to.exist;",
+                  "    pm.expect(services.database).to.eql('MongoDB Atlas');",
+                  "    pm.expect(services.search).to.eql('Tavily API');",
+                  "    pm.expect(services.llm).to.eql('OpenAI GPT-4');",
+                  "    pm.expect(services.backend).to.eql('Node.js + Express');",
+                  "    pm.expect(services.frontend).to.eql('React + Tailwind CSS');",
+                  "    ",
+                  "    console.log('All services integrated:', Object.keys(services).join(', '));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analysis/system/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analysis", "system", "status"]
+            },
+            "description": "Verify integration of all system services and APIs"
+          },
+          "response": []
+        },
+        {
+          "name": "Export Integration Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Export system integration', function () {",
+                  "    if (pm.response.code === 404) {",
+                  "        console.log('No completed analysis found for export test');",
+                  "        pm.expect(pm.response.code).to.eql(404);",
+                  "    } else {",
+                  "        const response = pm.response.json();",
+                  "        pm.expect(response.success).to.eql(true);",
+                  "        pm.expect(response.data.formats).to.be.an('array');",
+                  "        pm.expect(response.data.formats).to.include.members(['json', 'html', 'pdf']);",
+                  "        ",
+                  "        console.log('Export integration verified - formats:', response.data.formats.join(', '));",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/export/{{query_id}}/formats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "export", "{{query_id}}", "formats"]
+            },
+            "description": "Test export system integration with analysis results"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global pre-request script for all requests",
+          "console.log('='.repeat(60));",
+          "console.log('🤖 TavSearch Multi-Agent API Test Suite');",
+          "console.log('='.repeat(60));",
+          "console.log('Base URL:', pm.collectionVariables.get('base_url'));",
+          "console.log('User ID:', pm.collectionVariables.get('user_id'));",
+          "console.log('Request:', pm.info.requestName);",
+          "console.log('Timestamp:', new Date().toISOString());",
+          "",
+          "// Set request start time for performance tracking",
+          "pm.globals.set('requestStartTime', Date.now());"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global test script that runs after every request",
+          "",
+          "// Performance test - response time should be reasonable",
+          "pm.test('Response time is acceptable', function () {",
+          "    const maxTime = pm.info.requestName.includes('Analysis') ? 30000 : 10000;",
+          "    pm.expect(pm.response.responseTime).to.be.below(maxTime);",
+          "});",
+          "",
+          "// Structure test - all responses should have consistent structure",
+          "pm.test('Response has valid JSON structure', function () {",
+          "    pm.response.to.have.jsonBody();",
+          "    const response = pm.response.json();",
+          "    pm.expect(response).to.have.property('success');",
+          "    pm.expect(response).to.have.property('message');",
+          "    ",
+          "    // Success responses should have data",
+          "    if (response.success === true) {",
+          "        pm.expect(response).to.have.property('data');",
+          "    }",
+          "});",
+          "",
+          "// Security test - no sensitive data in responses",
+          "pm.test('Response does not expose sensitive data', function () {",
+          "    const responseText = pm.response.text().toLowerCase();",
+          "    pm.expect(responseText).to.not.include('password');",
+          "    pm.expect(responseText).to.not.include('apikey');",
+          "    pm.expect(responseText).to.not.include('secret');",
+          "    pm.expect(responseText).to.not.include('token');",
+          "});",
+          "",
+          "// CORS test - proper headers should be present",
+          "pm.test('CORS headers are present', function () {",
+          "    pm.expect(pm.response.headers.get('Access-Control-Allow-Origin')).to.exist;",
+          "});",
+          "",
+          "// Log response summary",
+          "const requestTime = Date.now() - pm.globals.get('requestStartTime');",
+          "console.log('Response Status:', pm.response.code, pm.response.status);",
+          "console.log('Response Time:', pm.response.responseTime, 'ms');",
+          "console.log('Request Processing Time:', requestTime, 'ms');",
+          "",
+          "// Log errors for debugging",
+          "if (pm.response.code >= 400) {",
+          "    console.log('❌ Request failed:', pm.info.requestName);",
+          "    console.log('URL:', pm.request.url);",
+          "    console.log('Status:', pm.response.code, pm.response.status);",
+          "    console.log('Response:', pm.response.text().substring(0, 500));",
+          "} else if (pm.response.code >= 200 && pm.response.code < 300) {",
+          "    console.log('✅ Request successful:', pm.info.requestName);",
+          "} else {",
+          "    console.log('⚠️ Unexpected status:', pm.response.code, 'for', pm.info.requestName);",
+          "}",
+          "",
+          "console.log('-'.repeat(40));"
+        ]
+      }
+    }
+  ],
+  "protocolProfileBehavior": {
+    "disableBodyPruning": true
+  }
+}

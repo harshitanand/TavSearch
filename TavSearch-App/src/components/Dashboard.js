@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -17,7 +17,7 @@ import { api } from '../services/api';
 import AnalysisProgress from './AnalysisProgress';
 import RecentAnalyses from './RecentAnalyses';
 
-const Dashboard = () => {
+const Dashboard = ({ onStartAnalysis, onSelectAnalysis, refreshTrigger }) => {
   const [query, setQuery] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [currentAnalysis, setCurrentAnalysis] = useState(null);
@@ -40,6 +40,14 @@ const Dashboard = () => {
       return;
     }
 
+    // Use the passed prop if available, otherwise fall back to local implementation
+    if (typeof onStartAnalysis === 'function') {
+      onStartAnalysis(query.trim());
+      setQuery(''); // Clear the input
+      return;
+    }
+
+    // Fallback local implementation
     setIsAnalyzing(true);
     const analysisToast = toast.loading('Starting market intelligence analysis...');
 
@@ -79,7 +87,7 @@ const Dashboard = () => {
 
     const poll = async () => {
       try {
-        const result = await api.getResults(queryId);
+        const result = await api.getAnalysisResults(queryId);
 
         if (result.query.status === 'completed' && result.result) {
           setIsAnalyzing(false);
@@ -96,18 +104,19 @@ const Dashboard = () => {
           toast.error('Analysis failed. Please try again.');
         } else if (attempts < maxAttempts) {
           attempts++;
-          setTimeout(poll, 5000);
+          setTimeout(poll, 5000); // Poll every 5 seconds
         } else {
           setIsAnalyzing(false);
           toast.error('Analysis timeout. Please try again.');
         }
       } catch (error) {
+        console.error('Polling error:', error);
         if (attempts < maxAttempts) {
           attempts++;
           setTimeout(poll, 5000);
         } else {
           setIsAnalyzing(false);
-          toast.error('Failed to get results. Please try again.');
+          toast.error('Failed to check analysis status.');
         }
       }
     };
@@ -115,99 +124,108 @@ const Dashboard = () => {
     poll();
   };
 
-  const handleExampleClick = (example) => {
-    setQuery(example);
+  const handleExampleQuery = (exampleQuery) => {
+    setQuery(exampleQuery);
   };
 
   const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !isAnalyzing) {
+    if (e.key === 'Enter') {
       handleAnalyze();
     }
   };
 
+  // Handle analysis selection - use prop if available
+  const handleSelectAnalysis = (analysis) => {
+    if (typeof onSelectAnalysis === 'function') {
+      onSelectAnalysis(analysis);
+    } else {
+      // Fallback behavior
+      console.log('Selected analysis:', analysis);
+      if (analysis.status === 'completed') {
+        navigate(`/results/${analysis._id}`);
+      } else {
+        toast.info(`Analysis is currently ${analysis.status}`);
+      }
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {/* Hero Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-12"
         >
-          <div className="flex justify-center mb-4">
-            <div className="p-3 bg-blue-600 rounded-full">
-              <BarChart3 className="h-8 w-8 text-white" />
-            </div>
+          <div className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-100 to-purple-100 rounded-full mb-6">
+            <Sparkles className="h-5 w-5 text-purple-600 mr-2" />
+            <span className="text-purple-600 font-medium">AI-Powered Market Intelligence</span>
           </div>
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">Market Intelligence System</h1>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            AI-powered market research and competitive analysis platform. Get comprehensive insights
-            in minutes, not weeks.
+
+          <h1 className="text-5xl font-bold text-gray-900 mb-6">
+            Unlock Market Insights with
+            <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              {' '}
+              5 AI Agents
+            </span>
+          </h1>
+
+          <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
+            Our advanced LangChain multi-agent system combines real-time web search, intelligent
+            analysis, and professional reporting to deliver comprehensive market intelligence in
+            minutes.
           </p>
-        </motion.div>
 
-        {/* Search Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="max-w-4xl mx-auto mb-12"
-        >
-          <div className="bg-white rounded-2xl shadow-xl p-8">
-            <div className="flex items-center mb-4">
-              <Sparkles className="h-6 w-6 text-blue-600 mr-2" />
-              <h2 className="text-2xl font-semibold text-gray-900">New Market Analysis</h2>
+          {/* Search Interface */}
+          <div className="max-w-2xl mx-auto mb-8">
+            <div className="relative">
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Ask about any market, industry, or business topic..."
+                className="w-full px-6 py-4 text-lg border border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-lg"
+                disabled={isAnalyzing}
+              />
+              <button
+                onClick={handleAnalyze}
+                disabled={isAnalyzing || !query.trim()}
+                className="absolute right-2 top-2 px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-semibold"
+              >
+                {isAnalyzing ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <>
+                    <Search className="h-5 w-5 mr-2 inline" />
+                    Analyze
+                  </>
+                )}
+              </button>
             </div>
 
-            <div className="space-y-4">
-              <div className="relative">
-                <input
-                  type="text"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Enter your market research question..."
-                  className="w-full px-6 py-4 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                  disabled={isAnalyzing}
-                />
-                <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+            {/* Example Queries */}
+            <div className="mt-4 text-sm text-gray-600">
+              <p className="mb-2">Try these examples:</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {exampleQueries.slice(0, 4).map((example, index) => (
                   <button
-                    onClick={handleAnalyze}
-                    disabled={isAnalyzing || !query.trim()}
-                    className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2 transition-colors"
+                    key={index}
+                    onClick={() => handleExampleQuery(example)}
+                    className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-700 transition-colors"
+                    disabled={isAnalyzing}
                   >
-                    {isAnalyzing ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <Search className="w-5 h-5" />
-                    )}
-                    <span>{isAnalyzing ? 'Analyzing...' : 'Analyze'}</span>
+                    {example}
                   </button>
-                </div>
-              </div>
-
-              {/* Example Queries */}
-              <div>
-                <p className="text-sm text-gray-600 mb-3">Try these examples:</p>
-                <div className="flex flex-wrap gap-2">
-                  {exampleQueries.map((example, index) => (
-                    <button
-                      key={index}
-                      onClick={() => handleExampleClick(example)}
-                      className="text-sm bg-gray-100 text-gray-700 px-3 py-2 rounded-full hover:bg-blue-100 hover:text-blue-700 transition-colors"
-                      disabled={isAnalyzing}
-                    >
-                      {example}
-                    </button>
-                  ))}
-                </div>
+                ))}
               </div>
             </div>
           </div>
         </motion.div>
 
-        {/* Current Analysis Progress */}
-        {currentAnalysis && (
+        {/* Analysis Progress */}
+        {(isAnalyzing || currentAnalysis) && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -262,7 +280,7 @@ const Dashboard = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
         >
-          <RecentAnalyses />
+          <RecentAnalyses onSelectAnalysis={handleSelectAnalysis} refreshTrigger={refreshTrigger} />
         </motion.div>
       </div>
     </div>

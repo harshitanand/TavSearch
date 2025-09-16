@@ -110,12 +110,20 @@ const App = () => {
   };
 
   const handleSelectAnalysis = (analysis) => {
-    setCurrentAnalysis({
-      queryId: analysis._id,
-      query: analysis.queryText,
+    console.log('Selected analysis:', analysis); // Debug logging
+
+    // Use queryId from API response, not _id
+    const analysisData = {
+      queryId: analysis.queryId || analysis._id,
+      query: analysis.query || analysis.queryText,
       status: analysis.status,
       framework: analysis.framework || 'LangChain Multi-Agent',
-    });
+      createdAt: analysis.createdAt,
+      priority: analysis.priority,
+      tags: analysis.tags,
+    };
+
+    setCurrentAnalysis(analysisData);
 
     if (analysis.status === 'completed') {
       setCurrentView('results');

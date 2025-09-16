@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   FileText,
@@ -13,6 +13,7 @@ import {
   Lightbulb,
   Target,
   Loader2,
+  Activity,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../services/api';
@@ -20,7 +21,6 @@ import Charts from './Charts';
 
 const AnalysisResults = () => {
   const { queryId } = useParams();
-  const navigate = useNavigate();
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(true);
   const [exportLoading, setExportLoading] = useState(false);
@@ -33,7 +33,7 @@ const AnalysisResults = () => {
   const loadResults = async () => {
     try {
       setLoading(true);
-      const data = await api.getResults(queryId);
+      const data = await api.getAnalysisResults(queryId);
 
       if (data.query.status === 'completed' && data.result) {
         setResults(data);
@@ -105,8 +105,10 @@ const AnalysisResults = () => {
     );
   }
 
-  const analysisResults = results.result?.agentOutputs?.analysisResults || {};
-  const processedData = results.result?.agentOutputs?.processedData || {};
+  const analysisData = results.data || {};
+  const analysisResults = analysisData.results || {};
+  const workflowState = analysisData.workflowState || {};
+  const metadata = analysisData.metadata || {};
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -170,42 +172,76 @@ const AnalysisResults = () => {
         </div>
 
         {/* Executive Summary */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-xl shadow-lg p-8 mb-8"
-        >
-          <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center">
-            <FileText className="h-6 w-6 mr-2 text-blue-600" />
-            Executive Summary
-          </h2>
-          <p className="text-gray-700 leading-relaxed">
-            {analysisResults.summary ||
-              'Comprehensive market intelligence analysis completed with actionable insights for strategic decision-making.'}
-          </p>
+        {analysisResults.summary && (
+          <motion.div className="bg-white rounded-xl shadow-lg p-8 mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+              <FileText className="h-6 w-6 mr-2 text-blue-600" />
+              Executive Summary
+            </h2>
+            <div className="bg-blue-50 border-l-4 border-blue-400 p-6 rounded">
+              <p className="text-gray-800 leading-relaxed">{analysisResults.summary}</p>
+            </div>
+          </motion.div>
+        )}
 
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-blue-50 rounded-lg p-4">
-              <div className="text-2xl font-bold text-blue-600">
-                {processedData.totalSources || 0}
-              </div>
-              <div className="text-sm text-gray-600">Sources Analyzed</div>
+        {/* Key Findings */}
+        {analysisResults.keyFindings && analysisResults.keyFindings.length > 0 && (
+          <motion.div className="bg-white rounded-xl shadow-lg p-8 mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+              <Lightbulb className="h-6 w-6 mr-2 text-yellow-600" />
+              Key Findings
+            </h2>
+            <div className="space-y-4">
+              {analysisResults.keyFindings.map((finding, index) => (
+                <div key={index} className="flex items-start space-x-3">
+                  <div className="flex-shrink-0 w-6 h-6 bg-green-100 text-green-800 rounded-full flex items-center justify-center text-sm font-medium">
+                    {index + 1}
+                  </div>
+                  <p className="text-gray-800">{finding}</p>
+                </div>
+              ))}
             </div>
-            <div className="bg-green-50 rounded-lg p-4">
-              <div className="text-2xl font-bold text-green-600">
-                {analysisResults.dataConfidence || 'Medium'}
-              </div>
-              <div className="text-sm text-gray-600">Data Confidence</div>
-            </div>
-            <div className="bg-purple-50 rounded-lg p-4">
-              <div className="text-2xl font-bold text-purple-600">
-                {(analysisResults.keyTrends?.length || 0) + (analysisResults.insights?.length || 0)}
-              </div>
-              <div className="text-sm text-gray-600">Key Insights</div>
-            </div>
-          </div>
-        </motion.div>
+          </motion.div>
+        )}
 
+        {/* Recommendations */}
+        {analysisResults.recommendations && analysisResults.recommendations.length > 0 && (
+          <motion.div className="bg-white rounded-xl shadow-lg p-8 mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+              <Target className="h-6 w-6 mr-2 text-purple-600" />
+              Recommendations
+            </h2>
+            <div className="space-y-4">
+              {analysisResults.recommendations.map((rec, index) => (
+                <div key={index} className="flex items-start space-x-3">
+                  <div className="flex-shrink-0 w-6 h-6 bg-purple-100 text-purple-800 rounded-full flex items-center justify-center text-sm font-medium">
+                    {index + 1}
+                  </div>
+                  <p className="text-gray-800">{rec}</p>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Agent Execution Times */}
+        {metadata.agentExecutionTimes && (
+          <motion.div className="bg-white rounded-xl shadow-lg p-8 mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+              <Activity className="h-6 w-6 mr-2 text-indigo-600" />
+              Multi-Agent Workflow Performance
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              {Object.entries(metadata.agentExecutionTimes).map(([agent, time]) => (
+                <div key={agent} className="text-center p-4 bg-gray-50 rounded-lg">
+                  <CheckCircle className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                  <h3 className="font-medium text-gray-900 capitalize">{agent}</h3>
+                  <p className="text-sm text-gray-600">{time}s</p>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
         {/* Key Trends */}
         {analysisResults.keyTrends && analysisResults.keyTrends.length > 0 && (
           <motion.div

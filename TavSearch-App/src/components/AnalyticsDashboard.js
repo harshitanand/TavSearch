@@ -173,7 +173,9 @@ const AnalyticsDashboard = () => {
             </div>
             <div>
               <p className="text-sm text-gray-600">Export Downloads</p>
-              <p className="text-lg font-bold text-gray-900">{usage.exports || 0}</p>
+              <p className="text-lg font-bold text-gray-900">
+                {usage.exports?.totalExports || usage.exports?.total || 0}
+              </p>
             </div>
           </div>
         </div>

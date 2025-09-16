@@ -320,43 +320,69 @@ class AnalysisService extends EventEmitter {
     try {
       const { limit = 10, skip = 0, status, sortBy = 'createdAt', sortOrder = 'desc' } = options;
 
-      const query = { userId, framework: 'langchain-multiagent' };
-      if (status) {
+      // ✅ FIX 1: Validate and sanitize inputs
+      const sanitizedLimit = Math.max(1, Math.min(parseInt(limit) || 10, 100)); // Cap at 100
+      const sanitizedSkip = Math.max(0, parseInt(skip) || 0);
+
+      // ✅ FIX 2: Ensure userId is treated as string, not ObjectId
+      const query = {
+        userId: String(userId), // Explicitly convert to string
+      };
+
+      // ✅ FIX 3: Validate status if provided
+      if (status && typeof status === 'string') {
         query.status = status;
       }
 
+      // ✅ FIX 4: Validate sortBy field to prevent injection
+      const allowedSortFields = ['createdAt', 'completedAt', 'status', 'priority', 'queryText'];
+      const safeSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
+
       const sortOptions = {};
-      sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+      sortOptions[safeSortBy] = sortOrder === 'desc' ? -1 : 1;
+
+      logger.debug('MongoDB query:', {
+        query,
+        sortOptions,
+        limit: sanitizedLimit,
+        skip: sanitizedSkip,
+      });
 
       const analyses = await Query.find(query)
         .sort(sortOptions)
-        .limit(limit)
-        .skip(skip)
-        .select('_id queryText status priority tags createdAt completedAt error framework');
+        .limit(sanitizedLimit)
+        .skip(sanitizedSkip)
+        .select('_id queryText status priority tags createdAt completedAt error framework')
+        .lean(); // ✅ FIX 5: Add .lean() for better performance and avoid hydration issues
 
       const total = await Query.countDocuments(query);
 
       return {
         analyses: analyses.map((analysis) => ({
-          queryId: analysis._id,
-          query: analysis.queryText,
-          status: analysis.status,
-          framework: analysis.framework,
-          priority: analysis.priority,
-          tags: analysis.tags,
+          queryId: analysis._id.toString(), // ✅ FIX 6: Explicitly convert ObjectId to string
+          query: analysis.queryText || '',
+          status: analysis.status || 'unknown',
+          framework: analysis.framework || 'langchain-multiagent',
+          priority: analysis.priority || 'normal',
+          tags: Array.isArray(analysis.tags) ? analysis.tags : [],
           createdAt: analysis.createdAt,
           completedAt: analysis.completedAt,
-          error: analysis.error,
+          error: analysis.error || null,
         })),
         pagination: {
           total,
-          limit,
-          skip,
-          hasMore: skip + analyses.length < total,
+          limit: sanitizedLimit,
+          skip: sanitizedSkip,
+          hasMore: sanitizedSkip + analyses.length < total,
         },
       };
     } catch (error) {
-      logger.error('Failed to get user LangChain Multi-Agent analyses:', error);
+      logger.error('Failed to get user LangChain Multi-Agent analyses:', {
+        userId,
+        options,
+        error: error.message,
+        stack: error.stack,
+      });
       throw error;
     }
   }
@@ -437,6 +463,94 @@ class AnalysisService extends EventEmitter {
     });
 
     return domains;
+  }
+
+  async getAnalysisStatus(queryId, userId) {
+    try {
+      const query = await Query.findOne({ _id: queryId, userId: String(userId) });
+      if (!query) return null;
+
+      return {
+        queryId,
+        status: query.status,
+        progress: query.metadata?.progress || { current: 0, total: 5, percentage: 0 },
+        currentStep: query.metadata?.currentStep || 'initializing',
+        framework: 'langchain-multiagent',
+        createdAt: query.createdAt,
+        updatedAt: query.updatedAt,
+      };
+    } catch (error) {
+      logger.error('Failed to get analysis status:', error);
+      throw error;
+    }
+  }
+
+  async cancelAnalysis(queryId, userId) {
+    try {
+      const query = await Query.findOne({ _id: queryId, userId: String(userId) });
+      if (!query) throw new Error('Analysis not found');
+      if (query.status === 'completed') throw new Error('Cannot cancel completed analysis');
+
+      await Query.findByIdAndUpdate(queryId, {
+        status: 'cancelled',
+        completedAt: new Date(),
+      });
+
+      // Remove from active workflows if exists
+      if (this.activeWorkflows) {
+        this.activeWorkflows.delete(queryId);
+      }
+
+      return { success: true };
+    } catch (error) {
+      logger.error('Failed to cancel analysis:', error);
+      throw error;
+    }
+  }
+
+  async retryAnalysis(queryId, userId) {
+    try {
+      const originalQuery = await Query.findOne({ _id: queryId, userId: String(userId) });
+      if (!originalQuery) throw new Error('Original analysis not found');
+
+      return await this.startAnalysis({
+        userId,
+        query: originalQuery.queryText,
+        priority: originalQuery.priority,
+        tags: originalQuery.tags,
+      });
+    } catch (error) {
+      logger.error('Failed to retry analysis:', error);
+      throw error;
+    }
+  }
+
+  async getAnalysisStats(options = {}) {
+    try {
+      const { userId } = options;
+      const query = userId ? { userId: String(userId) } : {};
+
+      const [total, completed, failed, processing] = await Promise.all([
+        Query.countDocuments(query),
+        Query.countDocuments({ ...query, status: 'completed' }),
+        Query.countDocuments({ ...query, status: 'failed' }),
+        Query.countDocuments({ ...query, status: 'processing' }),
+      ]);
+
+      const successRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+      return {
+        total,
+        completed,
+        failed,
+        processing,
+        successRate: `${successRate}%`,
+        framework: 'langchain-multiagent',
+      };
+    } catch (error) {
+      logger.error('Failed to get analysis stats:', error);
+      throw error;
+    }
   }
 }
 

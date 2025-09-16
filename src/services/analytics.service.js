@@ -590,6 +590,373 @@ class AnalyticsService {
     }
   }
 
+  // Add this method to your existing AnalyticsService class
+
+  /**
+   * Get comprehensive dashboard metrics - integrates with existing architecture
+   */
+  async getDashboardMetrics(options = {}) {
+    try {
+      const {
+        timeframe = '24h',
+        userId = null,
+        includeCharts = true,
+        includeComparisons = true,
+      } = options;
+
+      this.logger.info('Getting dashboard metrics', {
+        timeframe,
+        userId,
+        includeCharts,
+        includeComparisons,
+      });
+
+      // Build date filter using existing helper
+      const dateFilter = this.buildTimeframeFilter(timeframe);
+      const previousDateFilter = this.buildPreviousTimeframeFilter(timeframe);
+
+      // Build base query
+      const baseQuery = {
+        ...dateFilter,
+        ...(userId && { userId: String(userId) }),
+      };
+
+      const previousQuery = {
+        ...previousDateFilter,
+        ...(userId && { userId: String(userId) }),
+      };
+
+      // Use existing methods where possible, add new parallel queries
+      const [
+        totalAnalyses,
+        completedAnalyses,
+        failedAnalyses,
+        processingAnalyses,
+        queuedAnalyses,
+        cancelledAnalyses,
+        avgProcessingTime,
+        systemHealth,
+        previousTotalAnalyses,
+        uniqueUsers,
+        topQueries,
+        performanceMetrics,
+        recentTrends,
+      ] = await Promise.all([
+        // Core counts
+        Query.countDocuments(baseQuery),
+        Query.countDocuments({ ...baseQuery, status: 'completed' }),
+        Query.countDocuments({ ...baseQuery, status: 'failed' }),
+        Query.countDocuments({ ...baseQuery, status: 'processing' }),
+        Query.countDocuments({ ...baseQuery, status: 'queued' }),
+        Query.countDocuments({ ...baseQuery, status: 'cancelled' }),
+
+        // Use existing method
+        this.calculateAverageProcessingTime(baseQuery),
+
+        // Use existing method
+        this.getSystemHealthMetrics(),
+
+        // Previous period for comparison
+        includeComparisons ? Query.countDocuments(previousQuery) : Promise.resolve(0),
+
+        // Unique users (skip if user-specific request)
+        userId ? Promise.resolve(1) : this.getUniqueUsersInPeriod(baseQuery),
+
+        // Use existing method
+        this.getTopQueries(baseQuery, 5),
+
+        // Use existing method
+        this.getPerformanceMetrics(baseQuery),
+
+        // Get trends for charts
+        includeCharts ? this.getDashboardTrends(baseQuery, timeframe) : Promise.resolve([]),
+      ]);
+
+      // Calculate derived metrics
+      const successRate =
+        totalAnalyses > 0 ? Math.round((completedAnalyses / totalAnalyses) * 100) : 0;
+
+      const growthPercentage =
+        includeComparisons && previousTotalAnalyses > 0
+          ? Math.round(((totalAnalyses - previousTotalAnalyses) / previousTotalAnalyses) * 100)
+          : 0;
+
+      // Build comprehensive response
+      const metrics = {
+        // Core metrics
+        totalAnalyses,
+        completedAnalyses,
+        processingAnalyses,
+        failedAnalyses,
+        queuedAnalyses,
+        cancelledAnalyses,
+        activeUsers: uniqueUsers,
+        successRate: `${successRate}%`,
+        avgProcessingTime: this.formatDuration(avgProcessingTime),
+
+        // Growth comparison
+        ...(includeComparisons && {
+          growthPercentage,
+          growthDirection: growthPercentage > 0 ? 'up' : growthPercentage < 0 ? 'down' : 'stable',
+          previousPeriodTotal: previousTotalAnalyses,
+        }),
+
+        // Status breakdown
+        statusBreakdown: {
+          completed: completedAnalyses,
+          processing: processingAnalyses,
+          failed: failedAnalyses,
+          queued: queuedAnalyses,
+          cancelled: cancelledAnalyses,
+        },
+
+        // System health from existing method
+        systemHealth,
+
+        // Performance metrics from existing method
+        performance: {
+          avgTotalDuration: performanceMetrics.avgTotalDuration,
+          avgSourcesProcessed: performanceMetrics.avgSourcesProcessed,
+          avgQualityScore: performanceMetrics.avgQualityScore,
+          efficiency: performanceMetrics.efficiency,
+          apiEfficiency: performanceMetrics.apiEfficiency,
+        },
+
+        // Top queries from existing method
+        topQueries,
+
+        // Charts data (if requested)
+        ...(includeCharts && {
+          trends: recentTrends,
+          statusChart: this.buildStatusChartData({
+            completed: completedAnalyses,
+            processing: processingAnalyses,
+            failed: failedAnalyses,
+            queued: queuedAnalyses,
+            cancelled: cancelledAnalyses,
+          }),
+          activityChart: await this.getActivityChartData(baseQuery, timeframe),
+        }),
+
+        // Metadata
+        timeframe,
+        period: {
+          start: dateFilter.createdAt?.$gte,
+          end: dateFilter.createdAt?.$lte || new Date(),
+        },
+        generatedAt: new Date().toISOString(),
+      };
+
+      this.logger.info('Dashboard metrics generated successfully', {
+        totalAnalyses,
+        successRate: `${successRate}%`,
+        timeframe,
+        userId: userId || 'system-wide',
+      });
+
+      return metrics;
+    } catch (error) {
+      this.logger.error('Failed to get dashboard metrics', {
+        error: error.message,
+        stack: error.stack,
+        options,
+      });
+      throw new ApiError('Failed to retrieve dashboard metrics', 500);
+    }
+  }
+
+  /**
+   * Helper method to build timeframe filter
+   */
+  buildTimeframeFilter(timeframe) {
+    const endDate = new Date();
+    let startDate;
+
+    switch (timeframe) {
+      case '1h':
+        startDate = new Date(endDate.getTime() - 60 * 60 * 1000);
+        break;
+      case '6h':
+        startDate = new Date(endDate.getTime() - 6 * 60 * 60 * 1000);
+        break;
+      case '24h':
+      default:
+        startDate = new Date(endDate.getTime() - 24 * 60 * 60 * 1000);
+        break;
+      case '7d':
+        startDate = new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case '30d':
+        startDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+    }
+
+    return {
+      createdAt: { $gte: startDate, $lte: endDate },
+    };
+  }
+
+  /**
+   * Helper method to build previous period filter for comparison
+   */
+  buildPreviousTimeframeFilter(timeframe) {
+    const currentFilter = this.buildTimeframeFilter(timeframe);
+    const duration =
+      currentFilter.createdAt.$lte.getTime() - currentFilter.createdAt.$gte.getTime();
+
+    const previousEnd = new Date(currentFilter.createdAt.$gte);
+    const previousStart = new Date(previousEnd.getTime() - duration);
+
+    return {
+      createdAt: { $gte: previousStart, $lte: previousEnd },
+    };
+  }
+
+  /**
+   * Get unique users in period
+   */
+  async getUniqueUsersInPeriod(filter) {
+    try {
+      const users = await Query.distinct('userId', filter);
+      return users.length;
+    } catch (error) {
+      this.logger.error('Failed to get unique users', { error: error.message });
+      return 0;
+    }
+  }
+
+  /**
+   * Get dashboard trends for charts
+   */
+  async getDashboardTrends(baseQuery, timeframe) {
+    try {
+      let groupBy;
+
+      switch (timeframe) {
+        case '1h':
+        case '6h':
+          groupBy = { $dateToString: { format: '%Y-%m-%d %H:00', date: '$createdAt' } };
+          break;
+        case '24h':
+          groupBy = { $dateToString: { format: '%Y-%m-%d %H:00', date: '$createdAt' } };
+          break;
+        case '7d':
+          groupBy = { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } };
+          break;
+        case '30d':
+        default:
+          groupBy = { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } };
+          break;
+      }
+
+      const trends = await Query.aggregate([
+        { $match: baseQuery },
+        {
+          $group: {
+            _id: groupBy,
+            total: { $sum: 1 },
+            completed: {
+              $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] },
+            },
+            failed: {
+              $sum: { $cond: [{ $eq: ['$status', 'failed'] }, 1, 0] },
+            },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ]);
+
+      return trends.map((item) => ({
+        period: item._id,
+        total: item.total,
+        completed: item.completed,
+        failed: item.failed,
+        successRate: item.total > 0 ? Math.round((item.completed / item.total) * 100) : 0,
+      }));
+    } catch (error) {
+      this.logger.error('Failed to get dashboard trends', { error: error.message });
+      return [];
+    }
+  }
+
+  /**
+   * Build status chart data for frontend
+   */
+  buildStatusChartData(statusCounts) {
+    return {
+      type: 'pie',
+      title: 'Analysis Status Distribution',
+      data: {
+        labels: Object.keys(statusCounts),
+        values: Object.values(statusCounts),
+        colors: {
+          completed: '#10B981',
+          processing: '#3B82F6',
+          failed: '#EF4444',
+          queued: '#F59E0B',
+          cancelled: '#6B7280',
+        },
+      },
+    };
+  }
+
+  /**
+   * Get activity chart data
+   */
+  async getActivityChartData(baseQuery, timeframe) {
+    try {
+      // Reuse existing trend logic but format for charts
+      const trends = await this.getDashboardTrends(baseQuery, timeframe);
+
+      return {
+        type: 'line',
+        title: `Analysis Activity - ${timeframe}`,
+        data: {
+          labels: trends.map((t) => t.period),
+          datasets: [
+            {
+              label: 'Total Analyses',
+              data: trends.map((t) => t.total),
+              color: '#3B82F6',
+            },
+            {
+              label: 'Completed',
+              data: trends.map((t) => t.completed),
+              color: '#10B981',
+            },
+            {
+              label: 'Failed',
+              data: trends.map((t) => t.failed),
+              color: '#EF4444',
+            },
+          ],
+        },
+      };
+    } catch (error) {
+      this.logger.error('Failed to get activity chart data', { error: error.message });
+      return null;
+    }
+  }
+
+  /**
+   * Format duration for display (reuse existing logic)
+   */
+  formatDuration(seconds) {
+    if (!seconds || seconds < 0) return '0s';
+
+    if (seconds < 60) {
+      return `${Math.round(seconds)}s`;
+    } else if (seconds < 3600) {
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = Math.round(seconds % 60);
+      return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
+    } else {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.round((seconds % 3600) / 60);
+      return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+    }
+  }
+
   getGroupByExpression(granularity) {
     switch (granularity) {
       case 'hour':
@@ -640,6 +1007,532 @@ class AnalyticsService {
       if (endDate) filter.createdAt.$lte = new Date(endDate);
     }
     return filter;
+  }
+
+  /**
+   * Get comprehensive usage statistics - integrates with existing architecture
+   */
+  async getUsageStats(options = {}) {
+    try {
+      const { period = '30d', userId = null, breakdown = false, includeDetails = false } = options;
+
+      this.logger.info('Getting usage statistics', {
+        period,
+        userId,
+        breakdown,
+        includeDetails,
+      });
+
+      // Build date filter using existing pattern
+      const dateFilter = this.buildPeriodFilter(period);
+
+      // Build base query
+      const baseQuery = {
+        ...dateFilter,
+        ...(userId && { userId: String(userId) }),
+      };
+
+      // Parallel execution for all usage metrics
+      const [
+        totalQueries,
+        completedQueries,
+        failedQueries,
+        processingQueries,
+        totalUsers,
+        apiCallsData,
+        dataProcessedInfo,
+        exportStats,
+        categoryBreakdown,
+        timeBreakdown,
+        performanceData,
+        quotaUsage,
+      ] = await Promise.all([
+        // Basic query counts
+        Query.countDocuments(baseQuery),
+        Query.countDocuments({ ...baseQuery, status: 'completed' }),
+        Query.countDocuments({ ...baseQuery, status: 'failed' }),
+        Query.countDocuments({ ...baseQuery, status: 'processing' }),
+
+        // User metrics (skip if user-specific)
+        userId
+          ? Promise.resolve(1)
+          : Query.distinct('userId', baseQuery).then((users) => users.length),
+
+        // API usage from Results collection
+        this.getApiCallsUsage(baseQuery),
+
+        // Data processing metrics
+        this.getDataProcessedMetrics(baseQuery),
+
+        // Export usage
+        this.getExportUsageStats(baseQuery),
+
+        // Category breakdown (if requested)
+        breakdown ? this.getCategoryUsageBreakdown(baseQuery) : Promise.resolve([]),
+
+        // Time-based breakdown (if requested)
+        breakdown ? this.getTimeUsageBreakdown(baseQuery, period) : Promise.resolve([]),
+
+        // Performance metrics
+        includeDetails ? this.getUsagePerformanceMetrics(baseQuery) : Promise.resolve({}),
+
+        // Quota usage (if user-specific)
+        userId ? this.getUserQuotaUsage(userId, period) : Promise.resolve({}),
+      ]);
+
+      // Calculate derived metrics
+      const successRate =
+        totalQueries > 0 ? Math.round((completedQueries / totalQueries) * 100) : 0;
+
+      const avgQueriesPerUser =
+        totalUsers > 0 ? Math.round((totalQueries / totalUsers) * 10) / 10 : 0;
+
+      // Build comprehensive response
+      const usageStats = {
+        // Overview metrics
+        overview: {
+          period,
+          totalQueries,
+          completedQueries,
+          failedQueries,
+          processingQueries,
+          successRate: `${successRate}%`,
+          totalUsers,
+          avgQueriesPerUser,
+          generatedAt: new Date().toISOString(),
+        },
+
+        // API usage metrics
+        apiUsage: {
+          totalApiCalls: apiCallsData.totalCalls,
+          avgCallsPerQuery: apiCallsData.avgCallsPerQuery,
+          apiEfficiency: apiCallsData.efficiency,
+          mostUsedEndpoints: apiCallsData.topEndpoints,
+        },
+
+        // Data processing metrics
+        dataProcessing: {
+          totalDataProcessed: dataProcessedInfo.totalMB,
+          avgDataPerQuery: dataProcessedInfo.avgMBPerQuery,
+          totalSourcesProcessed: dataProcessedInfo.totalSources,
+          avgSourcesPerQuery: dataProcessedInfo.avgSourcesPerQuery,
+        },
+
+        // Export statistics
+        exports: {
+          totalExports: exportStats.total,
+          exportsByFormat: exportStats.byFormat,
+          mostPopularFormat: exportStats.mostPopular,
+          exportRate: totalQueries > 0 ? Math.round((exportStats.total / totalQueries) * 100) : 0,
+        },
+
+        // Usage quotas (if user-specific)
+        ...(userId &&
+          Object.keys(quotaUsage).length > 0 && {
+            quotas: quotaUsage,
+          }),
+
+        // Detailed breakdowns (if requested)
+        ...(breakdown && {
+          categoryBreakdown,
+          timeBreakdown,
+          usage: {
+            peakHours: this.calculatePeakUsageHours(timeBreakdown),
+            busiestDay: this.calculateBusiestDay(timeBreakdown),
+            usagePattern: this.analyzeUsagePattern(timeBreakdown),
+          },
+        }),
+
+        // Performance details (if requested)
+        ...(includeDetails &&
+          Object.keys(performanceData).length > 0 && {
+            performance: performanceData,
+          }),
+
+        // Metadata
+        metadata: {
+          period,
+          userId: userId || 'system-wide',
+          includeDetails,
+          breakdown,
+          dateRange: {
+            start: dateFilter.createdAt?.$gte,
+            end: dateFilter.createdAt?.$lte || new Date(),
+          },
+        },
+      };
+
+      this.logger.info('Usage statistics generated successfully', {
+        period,
+        totalQueries,
+        totalUsers,
+        userId: userId || 'system-wide',
+      });
+
+      return usageStats;
+    } catch (error) {
+      this.logger.error('Failed to get usage statistics', {
+        error: error.message,
+        stack: error.stack,
+        options,
+      });
+      throw new ApiError('Failed to retrieve usage statistics', 500);
+    }
+  }
+
+  /**
+   * Build period filter helper
+   */
+  buildPeriodFilter(period) {
+    const endDate = new Date();
+    let startDate;
+
+    // Parse period (e.g., '7d', '30d', '90d', '1y')
+    const periodValue = parseInt(period.replace(/[^\d]/g, ''));
+    const periodUnit = period.replace(/\d/g, '');
+
+    switch (periodUnit) {
+      case 'h':
+        startDate = new Date(endDate.getTime() - periodValue * 60 * 60 * 1000);
+        break;
+      case 'd':
+      default:
+        startDate = new Date(endDate.getTime() - periodValue * 24 * 60 * 60 * 1000);
+        break;
+      case 'w':
+        startDate = new Date(endDate.getTime() - periodValue * 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'm':
+        startDate = new Date(endDate.getTime() - periodValue * 30 * 24 * 60 * 60 * 1000);
+        break;
+      case 'y':
+        startDate = new Date(endDate.getTime() - periodValue * 365 * 24 * 60 * 60 * 1000);
+        break;
+    }
+
+    return {
+      createdAt: { $gte: startDate, $lte: endDate },
+    };
+  }
+
+  /**
+   * Get API calls usage from Results collection
+   */
+  async getApiCallsUsage(baseQuery) {
+    try {
+      // Get query IDs from the base query
+      const queries = await Query.find(baseQuery).select('_id').lean();
+      const queryIds = queries.map((q) => q._id);
+
+      if (queryIds.length === 0) {
+        return {
+          totalCalls: 0,
+          avgCallsPerQuery: 0,
+          efficiency: 0,
+          topEndpoints: [],
+        };
+      }
+
+      const apiStats = await Result.aggregate([
+        { $match: { queryId: { $in: queryIds } } },
+        {
+          $group: {
+            _id: null,
+            totalCalls: { $sum: '$performance.apiCallsCount' },
+            totalQueries: { $sum: 1 },
+            avgCallsPerQuery: { $avg: '$performance.apiCallsCount' },
+          },
+        },
+      ]);
+
+      const stats = apiStats[0] || { totalCalls: 0, totalQueries: 0, avgCallsPerQuery: 0 };
+
+      return {
+        totalCalls: stats.totalCalls || 0,
+        avgCallsPerQuery: Math.round((stats.avgCallsPerQuery || 0) * 10) / 10,
+        efficiency:
+          stats.totalCalls > 0 ? Math.round((stats.totalQueries / stats.totalCalls) * 100) : 0,
+        topEndpoints: ['Tavily Search API', 'OpenAI GPT-4 API', 'Export API'], // Static for now
+      };
+    } catch (error) {
+      this.logger.error('Failed to get API calls usage', { error: error.message });
+      return { totalCalls: 0, avgCallsPerQuery: 0, efficiency: 0, topEndpoints: [] };
+    }
+  }
+
+  /**
+   * Get data processed metrics
+   */
+  async getDataProcessedMetrics(baseQuery) {
+    try {
+      // Get query IDs from the base query
+      const queries = await Query.find(baseQuery).select('_id').lean();
+      const queryIds = queries.map((q) => q._id);
+
+      if (queryIds.length === 0) {
+        return {
+          totalMB: '0 MB',
+          avgMBPerQuery: '0 MB',
+          totalSources: 0,
+          avgSourcesPerQuery: 0,
+        };
+      }
+
+      const dataStats = await Result.aggregate([
+        { $match: { queryId: { $in: queryIds } } },
+        {
+          $group: {
+            _id: null,
+            totalSources: { $sum: '$performance.sourcesProcessed' },
+            totalQueries: { $sum: 1 },
+            avgSources: { $avg: '$performance.sourcesProcessed' },
+          },
+        },
+      ]);
+
+      const stats = dataStats[0] || { totalSources: 0, totalQueries: 0, avgSources: 0 };
+
+      // Estimate data size (approximate 50KB per source)
+      const estimatedTotalMB = Math.round((stats.totalSources * 50) / 1024);
+      const estimatedAvgMB = Math.round((((stats.avgSources || 0) * 50) / 1024) * 10) / 10;
+
+      return {
+        totalMB: `${estimatedTotalMB} MB`,
+        avgMBPerQuery: `${estimatedAvgMB} MB`,
+        totalSources: stats.totalSources || 0,
+        avgSourcesPerQuery: Math.round((stats.avgSources || 0) * 10) / 10,
+      };
+    } catch (error) {
+      this.logger.error('Failed to get data processed metrics', { error: error.message });
+      return { totalMB: '0 MB', avgMBPerQuery: '0 MB', totalSources: 0, avgSourcesPerQuery: 0 };
+    }
+  }
+
+  /**
+   * Get export usage statistics
+   */
+  async getExportUsageStats(baseQuery) {
+    try {
+      // This would typically come from an Exports collection
+      // For now, estimate based on completed queries (assume 30% export rate)
+      const completedQueries = await Query.countDocuments({ ...baseQuery, status: 'completed' });
+      const estimatedExports = Math.round(completedQueries * 0.3);
+
+      return {
+        total: estimatedExports,
+        byFormat: {
+          pdf: Math.round(estimatedExports * 0.4),
+          html: Math.round(estimatedExports * 0.25),
+          json: Math.round(estimatedExports * 0.2),
+          csv: Math.round(estimatedExports * 0.1),
+          docx: Math.round(estimatedExports * 0.05),
+        },
+        mostPopular: 'pdf',
+      };
+    } catch (error) {
+      this.logger.error('Failed to get export usage stats', { error: error.message });
+      return { total: 0, byFormat: {}, mostPopular: 'pdf' };
+    }
+  }
+
+  /**
+   * Get category usage breakdown
+   */
+  async getCategoryUsageBreakdown(baseQuery) {
+    try {
+      const categories = await Query.aggregate([
+        { $match: baseQuery },
+        {
+          $group: {
+            _id: '$category',
+            count: { $sum: 1 },
+            successRate: {
+              $avg: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] },
+            },
+          },
+        },
+        { $sort: { count: -1 } },
+        {
+          $project: {
+            category: { $ifNull: ['$_id', 'uncategorized'] },
+            count: 1,
+            percentage: 1, // Will calculate after getting total
+            successRate: { $round: [{ $multiply: ['$successRate', 100] }, 1] },
+            _id: 0,
+          },
+        },
+      ]);
+
+      const totalQueries = categories.reduce((sum, cat) => sum + cat.count, 0);
+
+      return categories.map((cat) => ({
+        ...cat,
+        percentage: totalQueries > 0 ? Math.round((cat.count / totalQueries) * 100) : 0,
+      }));
+    } catch (error) {
+      this.logger.error('Failed to get category usage breakdown', { error: error.message });
+      return [];
+    }
+  }
+
+  /**
+   * Get time-based usage breakdown
+   */
+  async getTimeUsageBreakdown(baseQuery, period) {
+    try {
+      let groupBy;
+
+      // Determine grouping based on period
+      if (period.includes('h') || period === '1d') {
+        groupBy = { $dateToString: { format: '%Y-%m-%d %H:00', date: '$createdAt' } };
+      } else if (period.includes('d') && parseInt(period) <= 7) {
+        groupBy = { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } };
+      } else if (period.includes('d') && parseInt(period) <= 30) {
+        groupBy = { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } };
+      } else {
+        groupBy = { $dateToString: { format: '%Y-W%U', date: '$createdAt' } };
+      }
+
+      const timeBreakdown = await Query.aggregate([
+        { $match: baseQuery },
+        {
+          $group: {
+            _id: groupBy,
+            count: { $sum: 1 },
+            completed: {
+              $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] },
+            },
+            failed: {
+              $sum: { $cond: [{ $eq: ['$status', 'failed'] }, 1, 0] },
+            },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ]);
+
+      return timeBreakdown.map((item) => ({
+        period: item._id,
+        queries: item.count,
+        completed: item.completed,
+        failed: item.failed,
+        successRate: item.count > 0 ? Math.round((item.completed / item.count) * 100) : 0,
+      }));
+    } catch (error) {
+      this.logger.error('Failed to get time usage breakdown', { error: error.message });
+      return [];
+    }
+  }
+
+  /**
+   * Get usage performance metrics
+   */
+  async getUsagePerformanceMetrics(baseQuery) {
+    try {
+      const queries = await Query.find(baseQuery).select('_id').lean();
+      const queryIds = queries.map((q) => q._id);
+
+      if (queryIds.length === 0) return {};
+
+      const performance = await Result.aggregate([
+        { $match: { queryId: { $in: queryIds } } },
+        {
+          $group: {
+            _id: null,
+            avgTotalDuration: { $avg: '$performance.totalDuration' },
+            avgQualityScore: { $avg: '$qualityMetrics.overallScore' },
+            totalProcessingTime: { $sum: '$performance.totalDuration' },
+          },
+        },
+      ]);
+
+      const metrics = performance[0] || {};
+
+      return {
+        avgProcessingTime: Math.round((metrics.avgTotalDuration || 0) * 10) / 10,
+        avgQualityScore: Math.round((metrics.avgQualityScore || 0) * 10) / 10,
+        totalProcessingTime: Math.round((metrics.totalProcessingTime || 0) / 60), // Convert to minutes
+      };
+    } catch (error) {
+      this.logger.error('Failed to get usage performance metrics', { error: error.message });
+      return {};
+    }
+  }
+
+  /**
+   * Get user quota usage (if applicable)
+   */
+  async getUserQuotaUsage(userId, period) {
+    try {
+      const dateFilter = this.buildPeriodFilter(period);
+      const userQueries = await Query.countDocuments({
+        userId: String(userId),
+        ...dateFilter,
+      });
+
+      // Example quota limits (these would come from user subscription)
+      const quotaLimits = {
+        monthly: 100, // queries per month
+        daily: 10, // queries per day
+        exports: 50, // exports per month
+      };
+
+      return {
+        queriesUsed: userQueries,
+        queriesLimit: quotaLimits.monthly,
+        queriesRemaining: Math.max(0, quotaLimits.monthly - userQueries),
+        usagePercentage: Math.round((userQueries / quotaLimits.monthly) * 100),
+        resetDate: this.getNextResetDate(period),
+      };
+    } catch (error) {
+      this.logger.error('Failed to get user quota usage', { userId, error: error.message });
+      return {};
+    }
+  }
+
+  /**
+   * Helper methods for usage analysis
+   */
+  calculatePeakUsageHours(timeBreakdown) {
+    if (!timeBreakdown.length) return [];
+
+    const hourlyData = {};
+    timeBreakdown.forEach((item) => {
+      const hour = item.period.includes(':') ? item.period.split(' ')[1].split(':')[0] : '12';
+      hourlyData[hour] = (hourlyData[hour] || 0) + item.queries;
+    });
+
+    return Object.entries(hourlyData)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 3)
+      .map(([hour, count]) => ({ hour: `${hour}:00`, queries: count }));
+  }
+
+  calculateBusiestDay(timeBreakdown) {
+    if (!timeBreakdown.length) return null;
+
+    return timeBreakdown.reduce((max, current) => (current.queries > max.queries ? current : max));
+  }
+
+  analyzeUsagePattern(timeBreakdown) {
+    if (!timeBreakdown.length) return 'insufficient_data';
+
+    const total = timeBreakdown.reduce((sum, item) => sum + item.queries, 0);
+    const avg = total / timeBreakdown.length;
+    const variance =
+      timeBreakdown.reduce((sum, item) => sum + Math.pow(item.queries - avg, 2), 0) /
+      timeBreakdown.length;
+
+    if (variance < avg * 0.1) return 'consistent';
+    if (variance > avg * 0.5) return 'highly_variable';
+    return 'moderate_variation';
+  }
+
+  getNextResetDate(period) {
+    const now = new Date();
+    if (period.includes('m')) {
+      return new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    }
+    return new Date(now.getTime() + 24 * 60 * 60 * 1000); // Tomorrow
   }
 }
 

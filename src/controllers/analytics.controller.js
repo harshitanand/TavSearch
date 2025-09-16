@@ -1,7 +1,7 @@
 let AnalyticsService = require('../services/analytics.service');
 const { catchAsync } = require('../middleware/error.middleware');
 const { AuthorizationError } = require('../utils/errors');
-const logger = require('../utils/logger');
+const { logger } = require('../utils/logger');
 const config = require('../config');
 
 AnalyticsService = new AnalyticsService(config);
@@ -61,11 +61,7 @@ class AnalyticsController {
     // If userId is provided and user is not admin, only allow their own data
     const targetUserId = req.user.role === 'admin' ? userId : req.user.userId;
 
-    const trends = await AnalyticsService.getQueryTrends({
-      userId: targetUserId,
-      timeframe,
-      granularity,
-    });
+    const trends = await AnalyticsService.getQueryTrends(timeframe, granularity);
 
     res.json({
       success: true,

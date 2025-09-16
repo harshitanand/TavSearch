@@ -9,7 +9,7 @@ class ApiService {
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
-        'x-user-id': 'demo-user',
+        'x-user-id': 'demo-user-1',
       },
     });
 
@@ -32,6 +32,7 @@ class ApiService {
   }
 
   async getAnalysisResults(queryId) {
+    console.log('Fetching analysis results for queryId:', queryId);
     return this.client.get(`/api/analysis/${queryId}/results`);
   }
 
