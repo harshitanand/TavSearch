@@ -10,16 +10,24 @@ import {
   TrendingUp,
   FileText,
   User,
+  Home,
 } from 'lucide-react';
 
 const Layout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
 
+  // FIXED: Proper navigation paths
   const navigation = [
-    { name: 'Dashboard', href: '/', icon: BarChart3, current: location.pathname === '/' },
-    { name: 'New Analysis', href: '/', icon: Search, current: location.pathname === '/analyze' },
+    { name: 'Dashboard', href: '/', icon: Home, current: location.pathname === '/' },
+    {
+      name: 'Analytics',
+      href: '/analytics',
+      icon: BarChart3,
+      current: location.pathname === '/analytics',
+    },
     { name: 'History', href: '/history', icon: History, current: location.pathname === '/history' },
+    { name: 'Profile', href: '/profile', icon: User, current: location.pathname === '/profile' },
   ];
 
   return (
@@ -35,7 +43,7 @@ const Layout = ({ children }) => {
             <div className="flex h-16 items-center justify-between px-4">
               <div className="flex items-center space-x-2">
                 <TrendingUp className="h-8 w-8 text-blue-600" />
-                <span className="text-xl font-bold text-gray-900">MarketAI</span>
+                <span className="text-xl font-bold text-gray-900">TavSearch</span>
               </div>
               <button
                 onClick={() => setSidebarOpen(false)}
@@ -72,7 +80,7 @@ const Layout = ({ children }) => {
           <div className="flex h-16 items-center px-4 border-b border-gray-200">
             <div className="flex items-center space-x-2">
               <TrendingUp className="h-8 w-8 text-blue-600" />
-              <span className="text-xl font-bold text-gray-900">MarketAI</span>
+              <span className="text-xl font-bold text-gray-900">TavSearch</span>
             </div>
           </div>
 
@@ -124,7 +132,7 @@ const Layout = ({ children }) => {
           <div className="flex flex-1 items-center justify-between px-4">
             <div className="flex items-center space-x-2">
               <TrendingUp className="h-6 w-6 text-blue-600" />
-              <span className="text-lg font-semibold text-gray-900">MarketAI</span>
+              <span className="text-lg font-semibold text-gray-900">TavSearch</span>
             </div>
           </div>
         </div>

@@ -54,7 +54,7 @@ const Dashboard = ({ onStartAnalysis, onSelectAnalysis, refreshTrigger }) => {
     try {
       const response = await api.startAnalysis({
         query: query.trim(),
-        userId: 'demo-user',
+        userId: 'demo-user-1',
       });
 
       if (response.success) {
